@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>React Native + React Query Patterns</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --section-border: #d0d7de;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--section-border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Patterns Reference</h1>
+    <ul>
+      <li><a class="group">Setup</a></li>
+      <li><a href="#imports">Imports</a></li>
+      <li><a href="#types">Types</a></li>
+      <li><a href="#client">QueryClient setup</a></li>
+
+      <li><a class="group">Fetching</a></li>
+      <li><a href="#fetch-helpers">fetch helpers</a></li>
+      <li><a href="#use-query">useQuery — basic</a></li>
+      <li><a href="#use-query-signal">useQuery + AbortSignal</a></li>
+      <li><a href="#dependent-query">Dependent query</a></li>
+      <li><a href="#infinite">useInfiniteQuery</a></li>
+
+      <li><a class="group">Mutations</a></li>
+      <li><a href="#mutation-basic">useMutation — basic</a></li>
+      <li><a href="#mutation-optimistic">Optimistic update</a></li>
+
+      <li><a class="group">Patterns</a></li>
+      <li><a href="#debounce">Debounce hook</a></li>
+      <li><a href="#search-race">Race-safe search</a></li>
+      <li><a href="#websocket">WebSocket hook</a></li>
+      <li><a href="#pull-refresh">Pull to refresh</a></li>
+
+      <li><a class="group">Rendering</a></li>
+      <li><a href="#flatlist">FlatList — perf props</a></li>
+      <li><a href="#memoization">memo / useMemo / useCallback</a></li>
+
+      <li><a class="group">Reference</a></li>
+      <li><a href="#errors">Error + loading</a></li>
+      <li><a href="#full">Full screen example</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">React Native + React Query Patterns</h1>
+    <div class="doc-sub">Code-only reference for common RN + @tanstack/react-query patterns.</div>
+
+    <!-- ============ IMPORTS ============ -->
+    <h2 id="imports">Imports</h2>
+<pre><code>import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import {
+  View, Text, FlatList, Pressable, TextInput, ActivityIndicator,
+  RefreshControl, StyleSheet, ListRenderItemInfo,
+} from 'react-native';
+import {
+  QueryClient, QueryClientProvider,
+  useQuery, useMutation, useQueryClient, useInfiniteQuery,
+} from '@tanstack/react-query';</code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types">Types</h2>
+<pre><code>type Item = {
+  id: string;
+  title: string;
+  createdAt: number;
+};
+
+type Page = {
+  items: Item[];
+  nextCursor: string | null;
+};</code></pre>
+
+    <!-- ============ CLIENT ============ -->
+    <h2 id="client">QueryClient setup</h2>
+<pre><code>const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;Screen /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}</code></pre>
+
+    <!-- ============ FETCH HELPERS ============ -->
+    <h2 id="fetch-helpers">fetch helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+async function getItems(signal?: AbortSignal): Promise&lt;Item[]&gt; {
+  const r = await fetch(`${API_URL}/items`, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function postItem(input: { title: string }): Promise&lt;Item&gt; {
+  const r = await fetch(`${API_URL}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}</code></pre>
+
+    <!-- ============ USE QUERY BASIC ============ -->
+    <h2 id="use-query">useQuery — basic</h2>
+<pre><code>const { data, isLoading, isError, error, refetch } = useQuery&lt;Item[], Error&gt;({
+  queryKey: ['items'],
+  queryFn: () =&gt; getItems(),
+});</code></pre>
+
+    <!-- ============ USE QUERY SIGNAL ============ -->
+    <h2 id="use-query-signal">useQuery + AbortSignal</h2>
+    <p class="note">Cancels the in-flight request when the queryKey changes or component unmounts.</p>
+<pre><code>const { data } = useQuery&lt;Item[], Error&gt;({
+  queryKey: ['items', query],
+  queryFn: ({ signal }) =&gt; getItems(signal),
+  enabled: query.length &gt;= 2,
+  placeholderData: (prev) =&gt; prev,
+});</code></pre>
+
+    <!-- ============ DEPENDENT ============ -->
+    <h2 id="dependent-query">Dependent query</h2>
+<pre><code>const { data: user } = useQuery({
+  queryKey: ['user', userId],
+  queryFn: () =&gt; getUser(userId),
+});
+
+const { data: posts } = useQuery({
+  queryKey: ['posts', user?.id],
+  queryFn: () =&gt; getPosts(user!.id),
+  enabled: !!user?.id,
+});</code></pre>
+
+    <!-- ============ INFINITE ============ -->
+    <h2 id="infinite">useInfiniteQuery (pagination)</h2>
+<pre><code>const {
+  data, fetchNextPage, hasNextPage, isFetchingNextPage,
+} = useInfiniteQuery&lt;Page, Error&gt;({
+  queryKey: ['items', 'infinite'],
+  queryFn: ({ pageParam, signal }) =&gt;
+    fetch(`${API_URL}/items?cursor=${pageParam ?? ''}`, { signal }).then(r =&gt; r.json()),
+  initialPageParam: null as string | null,
+  getNextPageParam: (last) =&gt; last.nextCursor,
+});
+
+const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];
+
+&lt;FlatList
+  data={items}
+  keyExtractor={(i) =&gt; i.id}
+  renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+  onEndReached={() =&gt; { if (hasNextPage &amp;&amp; !isFetchingNextPage) fetchNextPage(); }}
+  onEndReachedThreshold={0.5}
+  ListFooterComponent={isFetchingNextPage ? &lt;ActivityIndicator /&gt; : null}
+/&gt;</code></pre>
+
+    <!-- ============ MUTATION BASIC ============ -->
+    <h2 id="mutation-basic">useMutation — basic</h2>
+<pre><code>const qc = useQueryClient();
+
+const { mutate, isPending } = useMutation({
+  mutationFn: postItem,
+  onSuccess: () =&gt; {
+    qc.invalidateQueries({ queryKey: ['items'] });
+  },
+});
+
+&lt;Pressable onPress={() =&gt; mutate({ title: 'New' })} disabled={isPending} /&gt;</code></pre>
+
+    <!-- ============ MUTATION OPTIMISTIC ============ -->
+    <h2 id="mutation-optimistic">Optimistic update</h2>
+<pre><code>const qc = useQueryClient();
+
+const mutation = useMutation({
+  mutationFn: postItem,
+
+  onMutate: async (input) =&gt; {
+    await qc.cancelQueries({ queryKey: ['items'] });
+    const previous = qc.getQueryData&lt;Item[]&gt;(['items']);
+
+    const optimistic: Item = {
+      id: `temp-${Date.now()}`,
+      title: input.title,
+      createdAt: Date.now(),
+    };
+    qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt; [optimistic, ...old]);
+
+    return { previous };
+  },
+
+  onError: (_err, _input, ctx) =&gt; {
+    if (ctx?.previous) qc.setQueryData(['items'], ctx.previous);
+  },
+
+  onSettled: () =&gt; {
+    qc.invalidateQueries({ queryKey: ['items'] });
+  },
+});</code></pre>
+
+    <!-- ============ DEBOUNCE ============ -->
+    <h2 id="debounce">Debounce hook</h2>
+<pre><code>function useDebounced&lt;T&gt;(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() =&gt; {
+    const id = setTimeout(() =&gt; setDebounced(value), delayMs);
+    return () =&gt; clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}</code></pre>
+
+    <!-- ============ RACE SAFE SEARCH ============ -->
+    <h2 id="search-race">Race-safe search</h2>
+<pre><code>function SearchScreen() {
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 300);
+
+  const { data: items = [], isFetching } = useQuery&lt;Item[], Error&gt;({
+    queryKey: ['items', 'search', debouncedSearch],
+    queryFn: ({ signal }) =&gt;
+      fetch(`${API_URL}/search?q=${encodeURIComponent(debouncedSearch)}`, { signal })
+        .then((r) =&gt; r.json()),
+    enabled: debouncedSearch.length &gt;= 2,
+    placeholderData: (prev) =&gt; prev,
+  });
+
+  return (
+    &lt;View&gt;
+      &lt;TextInput value={search} onChangeText={setSearch} placeholder="Search..." /&gt;
+      {isFetching &amp;&amp; &lt;ActivityIndicator size="small" /&gt;}
+      &lt;FlatList data={items} keyExtractor={(i) =&gt; i.id} renderItem={({ item }) =&gt; &lt;Text&gt;{item.title}&lt;/Text&gt;} /&gt;
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+    <!-- ============ WEBSOCKET ============ -->
+    <h2 id="websocket">WebSocket hook</h2>
+    <p class="note">Minimal: open / message / close + reconnect with backoff. Layer AppState / heartbeat as needed.</p>
+<pre><code>type WsStatus = 'idle' | 'connecting' | 'open' | 'closed';
+
+function useWebSocket&lt;T&gt;(url: string, onMessage: (msg: T) =&gt; void) {
+  const [status, setStatus] = useState&lt;WsStatus&gt;('idle');
+  const wsRef = useRef&lt;WebSocket | null&gt;(null);
+  const attemptsRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+
+  useEffect(() =&gt; {
+    isMountedRef.current = true;
+
+    const connect = () =&gt; {
+      if (!isMountedRef.current) return;
+      setStatus('connecting');
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () =&gt; { attemptsRef.current = 0; setStatus('open'); };
+      ws.onmessage = (e) =&gt; {
+        try { onMessageRef.current(JSON.parse(e.data) as T); } catch {}
+      };
+      ws.onerror = () =&gt; ws.close();
+      ws.onclose = () =&gt; {
+        setStatus('closed');
+        if (!isMountedRef.current) return;
+        const attempt = ++attemptsRef.current;
+        const delay = Math.min(30_000, 1000 * 2 ** attempt) + Math.random() * 1000;
+        setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+    return () =&gt; {
+      isMountedRef.current = false;
+      wsRef.current?.close();
+    };
+  }, [url]);
+
+  return { status };
+}</code></pre>
+
+    <!-- ============ PULL TO REFRESH ============ -->
+    <h2 id="pull-refresh">Pull to refresh</h2>
+<pre><code>const { data, isRefetching, refetch } = useQuery({ queryKey: ['items'], queryFn: () =&gt; getItems() });
+
+&lt;FlatList
+  data={data ?? []}
+  refreshControl={
+    &lt;RefreshControl refreshing={isRefetching} onRefresh={() =&gt; refetch()} /&gt;
+  }
+  renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+  keyExtractor={(i) =&gt; i.id}
+/&gt;</code></pre>
+
+    <!-- ============ FLATLIST PERF ============ -->
+    <h2 id="flatlist">FlatList — perf props</h2>
+    <table>
+      <thead><tr><th>Prop</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>keyExtractor</code></td><td>Return a stable id, not the index. Required for memo of rows to stick.</td></tr>
+        <tr><td><code>getItemLayout</code></td><td>If row height is fixed: <code>(_, i) =&gt; ({ length: H, offset: H * i, index: i })</code>. Skips measurement.</td></tr>
+        <tr><td><code>initialNumToRender</code></td><td>Default 10. Drop on cold start if rows are heavy.</td></tr>
+        <tr><td><code>windowSize</code></td><td>Default 21 (viewports). Reduce for memory; increase for fewer blanks while scrolling.</td></tr>
+        <tr><td><code>maxToRenderPerBatch</code></td><td>How many rows to render per batch. Lower = smoother scroll, slower fill.</td></tr>
+        <tr><td><code>removeClippedSubviews</code></td><td>Detaches off-screen native views. Android-friendly. Test for unmount bugs.</td></tr>
+        <tr><td><code>ListEmptyComponent</code></td><td>Renders when data is empty — cheaper than conditional JSX above the list.</td></tr>
+      </tbody>
+    </table>
+<pre><code>const renderItem = useCallback(
+  ({ item }: ListRenderItemInfo&lt;Item&gt;) =&gt; &lt;Row item={item} /&gt;,
+  []
+);
+
+const keyExtractor = useCallback((i: Item) =&gt; i.id, []);
+
+&lt;FlatList
+  data={items}
+  renderItem={renderItem}
+  keyExtractor={keyExtractor}
+  initialNumToRender={10}
+  windowSize={11}
+  removeClippedSubviews
+/&gt;</code></pre>
+
+    <!-- ============ MEMOIZATION ============ -->
+    <h2 id="memoization">memo / useMemo / useCallback</h2>
+    <h3>memo on a child</h3>
+<pre><code>const Row = memo(function Row({ item }: { item: Item }) {
+  return (
+    &lt;View style={styles.row}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});</code></pre>
+
+    <h3>useCallback — only useful if the function is passed to a memoized child</h3>
+<pre><code>const onPressRow = useCallback((id: string) =&gt; {
+  navigation.navigate('Detail', { id });
+}, [navigation]);</code></pre>
+
+    <h3>useMemo — for expensive derivations only</h3>
+<pre><code>const filtered = useMemo(
+  () =&gt; items.filter((i) =&gt; i.title.includes(query)),
+  [items, query]
+);</code></pre>
+
+    <p class="note">Both useMemo and useCallback re-create their cache each render based on deps. They cost CPU. Skip them when the work is cheap and the consumer is not memoized.</p>
+
+    <!-- ============ ERRORS ============ -->
+    <h2 id="errors">Error + loading</h2>
+<pre><code>if (isLoading) return &lt;ActivityIndicator /&gt;;
+if (isError) return &lt;Text&gt;{error.message}&lt;/Text&gt;;
+if (!data || data.length === 0) return &lt;Text&gt;Nothing yet&lt;/Text&gt;;</code></pre>
+
+    <!-- ============ FULL EXAMPLE ============ -->
+    <h2 id="full">Full screen example</h2>
+<pre><code>type Item = { id: string; title: string; createdAt: number };
+
+const API_URL = 'https://example.com/api';
+
+async function getItems(signal?: AbortSignal): Promise&lt;Item[]&gt; {
+  const r = await fetch(`${API_URL}/items`, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function postItem(input: { title: string }): Promise&lt;Item&gt; {
+  const r = await fetch(`${API_URL}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+const Row = memo(function Row({ item, onPress }: {
+  item: Item; onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(item.id)} style={styles.row}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+function Screen() {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState('');
+
+  const { data = [], isLoading, isError, error, isRefetching, refetch } =
+    useQuery&lt;Item[], Error&gt;({
+      queryKey: ['items'],
+      queryFn: ({ signal }) =&gt; getItems(signal),
+    });
+
+  const mutation = useMutation({
+    mutationFn: postItem,
+    onMutate: async (input) =&gt; {
+      await qc.cancelQueries({ queryKey: ['items'] });
+      const prev = qc.getQueryData&lt;Item[]&gt;(['items']);
+      const optimistic: Item = {
+        id: `temp-${Date.now()}`, title: input.title, createdAt: Date.now(),
+      };
+      qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt; [optimistic, ...old]);
+      return { prev };
+    },
+    onError: (_e, _i, ctx) =&gt; {
+      if (ctx?.prev) qc.setQueryData(['items'], ctx.prev);
+    },
+    onSettled: () =&gt; qc.invalidateQueries({ queryKey: ['items'] }),
+  });
+
+  const onPressRow = useCallback((id: string) =&gt; {
+    console.log('row', id);
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo&lt;Item&gt;) =&gt; &lt;Row item={item} onPress={onPressRow} /&gt;,
+    [onPressRow]
+  );
+
+  const keyExtractor = useCallback((i: Item) =&gt; i.id, []);
+
+  if (isLoading) return &lt;ActivityIndicator style={styles.center} /&gt;;
+  if (isError)   return &lt;Text style={styles.center}&gt;{error.message}&lt;/Text&gt;;
+
+  return (
+    &lt;View style={styles.container}&gt;
+      &lt;View style={styles.composer}&gt;
+        &lt;TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="Add item..."
+          style={styles.input}
+        /&gt;
+        &lt;Pressable
+          onPress={() =&gt; { mutation.mutate({ title: draft }); setDraft(''); }}
+          disabled={!draft || mutation.isPending}
+          style={styles.button}
+        &gt;
+          &lt;Text&gt;Add&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      &lt;/View&gt;
+      &lt;FlatList
+        data={data}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        refreshControl={
+          &lt;RefreshControl refreshing={isRefetching} onRefresh={() =&gt; refetch()} /&gt;
+        }
+        ListEmptyComponent={&lt;Text&gt;Nothing yet&lt;/Text&gt;}
+        initialNumToRender={10}
+        windowSize={11}
+      /&gt;
+    &lt;/View&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  center: { flex: 1, textAlign: 'center', marginTop: 40 },
+  composer: { flexDirection: 'row', padding: 12, gap: 8 },
+  input: { flex: 1, borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 6 },
+  button: { padding: 8, backgroundColor: '#eee', borderRadius: 6 },
+  row: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+});</code></pre>
+
+  </main>
+
+</div>
+
+</body>
+</html>

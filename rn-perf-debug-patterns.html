@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>React Native Performance + Debugging Patterns</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .label-bad, .label-good {
+    display: inline-block;
+    font-size: 11px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .label-bad { background: rgba(207, 34, 46, 0.1); color: var(--bad); }
+  .label-good { background: rgba(26, 127, 55, 0.1); color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Perf + Debug</h1>
+    <ul>
+      <li><a class="group">Diagnose</a></li>
+      <li><a href="#symptom-table">Symptom → cause table</a></li>
+      <li><a href="#render-count">useRenderCount hook</a></li>
+      <li><a href="#profiler">React Profiler wrap</a></li>
+      <li><a href="#manual-timing">Manual timing</a></li>
+
+      <li><a class="group">Re-renders</a></li>
+      <li><a href="#inline-props">Inline literal props</a></li>
+      <li><a href="#memo-child">memo on child</a></li>
+      <li><a href="#stable-callback">Stable callbacks</a></li>
+      <li><a href="#context-split">Context split</a></li>
+      <li><a href="#stable-ref">Stable ref pattern</a></li>
+      <li><a href="#stale-closure">Stale closure</a></li>
+      <li><a href="#effect-cascade">useEffect cascade</a></li>
+
+      <li><a class="group">Lists</a></li>
+      <li><a href="#flatlist-props">FlatList perf props</a></li>
+      <li><a href="#flatlist-row">Memoized row</a></li>
+
+      <li><a class="group">Async + cleanup</a></li>
+      <li><a href="#abort">AbortController</a></li>
+      <li><a href="#cleanup">Timer / sub cleanup</a></li>
+      <li><a href="#mounted">isMounted guard</a></li>
+
+      <li><a class="group">UI work</a></li>
+      <li><a href="#animation">Animation</a></li>
+      <li><a href="#images">Images</a></li>
+      <li><a href="#interaction">runAfterInteractions</a></li>
+
+      <li><a class="group">Startup</a></li>
+      <li><a href="#lazy">Lazy / dynamic import</a></li>
+      <li><a href="#dev-traps">Dev-only traps</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">React Native Performance + Debugging Patterns</h1>
+    <div class="doc-sub">Code-only reference for common RN perf issues and their fixes.</div>
+
+    <!-- ============ SYMPTOM TABLE ============ -->
+    <h2 id="symptom-table">Symptom → likely cause</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th>Where to look</th></tr></thead>
+      <tbody>
+        <tr><td>Whole screen re-renders on every keystroke</td><td>State lives too high; or context value is a new object each render</td><td><a href="#context-split">Context split</a></td></tr>
+        <tr><td>List rows re-render when one row changes</td><td>Row not memoized; or <code>renderItem</code>/<code>keyExtractor</code> is a new function each render</td><td><a href="#flatlist-row">Memoized row</a></td></tr>
+        <tr><td>Scroll jank on long lists</td><td>Missing <code>keyExtractor</code> / no <code>getItemLayout</code> / heavy row component</td><td><a href="#flatlist-props">FlatList props</a></td></tr>
+        <tr><td>App hangs for ~1s on screen open</td><td>Sync work in render or in <code>useEffect</code> with no <code>InteractionManager</code></td><td><a href="#interaction">runAfterInteractions</a></td></tr>
+        <tr><td>Memory grows over time</td><td>Uncleaned timers / subscriptions / listeners</td><td><a href="#cleanup">Cleanup</a></td></tr>
+        <tr><td>Animation drops frames</td><td>Animating layout props on JS thread instead of transform/opacity on native</td><td><a href="#animation">Animation</a></td></tr>
+        <tr><td>"Cannot update state on unmounted component"</td><td>Async work resolves after unmount</td><td><a href="#mounted">isMounted</a> / <a href="#abort">AbortController</a></td></tr>
+        <tr><td>Stale value in callback</td><td>Closure captured first-render value; deps missing</td><td><a href="#stale-closure">Stale closure</a></td></tr>
+        <tr><td>WebSocket reconnects on every render</td><td>Effect dep array re-creating; handler not in ref</td><td><a href="#stable-ref">Stable ref</a></td></tr>
+      </tbody>
+    </table>
+
+    <!-- ============ RENDER COUNT ============ -->
+    <h2 id="render-count">useRenderCount hook</h2>
+<pre><code>function useRenderCount(label: string) {
+  const count = useRef(0);
+  count.current += 1;
+  console.log(`[render] ${label}: ${count.current}`);
+}
+
+<span class="cmt">// Usage</span>
+function Row({ item }: { item: Item }) {
+  useRenderCount(`Row-${item.id}`);
+  return &lt;Text&gt;{item.title}&lt;/Text&gt;;
+}</code></pre>
+
+    <!-- ============ PROFILER ============ -->
+    <h2 id="profiler">React Profiler wrap</h2>
+<pre><code>import { Profiler } from 'react';
+
+function onRender(id: string, phase: string, actualDuration: number) {
+  if (actualDuration &gt; 16) console.log(`[slow] ${id} ${phase} ${actualDuration}ms`);
+}
+
+&lt;Profiler id="ItemList" onRender={onRender}&gt;
+  &lt;ItemList /&gt;
+&lt;/Profiler&gt;</code></pre>
+
+    <!-- ============ MANUAL TIMING ============ -->
+    <h2 id="manual-timing">Manual timing</h2>
+<pre><code>const t0 = performance.now();
+const result = expensiveDerivation(items);
+console.log(`derivation: ${(performance.now() - t0).toFixed(1)}ms`);</code></pre>
+
+    <!-- ============ INLINE PROPS ============ -->
+    <h2 id="inline-props">Inline literal props (anti-pattern)</h2>
+    <div class="label-bad">avoid</div>
+<pre><code>&lt;Row
+  item={item}
+  style={{ padding: 12 }}                       <span class="cmt">// new object every render</span>
+  onPress={() =&gt; navigation.navigate('Detail')} <span class="cmt">// new function every render</span>
+  meta={['a', 'b']}                              <span class="cmt">// new array every render</span>
+/&gt;</code></pre>
+
+    <div class="label-good">prefer</div>
+<pre><code>const META = ['a', 'b'];                   <span class="cmt">// hoist constant</span>
+const onPressRow = useCallback(             <span class="cmt">// stable function</span>
+  () =&gt; navigation.navigate('Detail'),
+  [navigation]
+);
+
+&lt;Row item={item} style={styles.row} onPress={onPressRow} meta={META} /&gt;
+
+const styles = StyleSheet.create({ row: { padding: 12 } });</code></pre>
+    <p class="note">Any <code>{...}</code> literal in props creates a new identity each render — breaks <code>memo</code> equality on the child.</p>
+
+    <!-- ============ MEMO CHILD ============ -->
+    <h2 id="memo-child">memo on child</h2>
+<pre><code>const Row = memo(function Row({ item, onPress }: {
+  item: Item;
+  onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(item.id)}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+<span class="cmt">// Custom comparison if needed</span>
+const Row2 = memo(
+  function Row2({ item }: { item: Item }) { return &lt;Text&gt;{item.title}&lt;/Text&gt;; },
+  (prev, next) =&gt; prev.item.id === next.item.id &amp;&amp; prev.item.title === next.item.title
+);</code></pre>
+
+    <!-- ============ STABLE CALLBACK ============ -->
+    <h2 id="stable-callback">Stable callbacks</h2>
+    <p class="note">Only useful if the function is passed to a memoized child or a hook's dep array.</p>
+<pre><code>const onPressRow = useCallback((id: string) =&gt; {
+  navigation.navigate('Detail', { id });
+}, [navigation]);
+
+const renderItem = useCallback(
+  ({ item }: ListRenderItemInfo&lt;Item&gt;) =&gt; &lt;Row item={item} onPress={onPressRow} /&gt;,
+  [onPressRow]
+);
+
+const keyExtractor = useCallback((i: Item) =&gt; i.id, []);</code></pre>
+
+    <!-- ============ CONTEXT SPLIT ============ -->
+    <h2 id="context-split">Context split</h2>
+    <p class="note">Split rarely-changing state from frequently-changing state into separate contexts so consumers don't re-render on unrelated changes.</p>
+
+    <div class="label-bad">avoid — one fat context</div>
+<pre><code>const AppContext = createContext({ user: null, theme: 'light', cursorPos: 0 });
+<span class="cmt">// Any component using AppContext re-renders when cursorPos changes</span></code></pre>
+
+    <div class="label-good">prefer — separate contexts</div>
+<pre><code>const UserContext = createContext&lt;User | null&gt;(null);
+const ThemeContext = createContext&lt;Theme&gt;('light');
+const CursorContext = createContext&lt;number&gt;(0);
+
+<span class="cmt">// Also: memoize the value prop on the Provider</span>
+const userValue = useMemo(() =&gt; user, [user]);
+
+&lt;UserContext.Provider value={userValue}&gt;...&lt;/UserContext.Provider&gt;</code></pre>
+
+    <!-- ============ STABLE REF ============ -->
+    <h2 id="stable-ref">Stable ref pattern</h2>
+    <p class="note">Use a ref to access the latest callback inside an effect that should not re-subscribe.</p>
+<pre><code>function useSocket(url: string, onMessage: (m: Msg) =&gt; void) {
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;  <span class="cmt">// updates every render — cheap</span>
+
+  useEffect(() =&gt; {
+    const ws = new WebSocket(url);
+    ws.onmessage = (e) =&gt; onMessageRef.current(JSON.parse(e.data));
+    return () =&gt; ws.close();
+  }, [url]);  <span class="cmt">// 👈 not [url, onMessage] — would reconnect on every render</span>
+}</code></pre>
+
+    <!-- ============ STALE CLOSURE ============ -->
+    <h2 id="stale-closure">Stale closure</h2>
+    <div class="label-bad">avoid</div>
+<pre><code>const [count, setCount] = useState(0);
+
+useEffect(() =&gt; {
+  const id = setInterval(() =&gt; {
+    console.log(count);    <span class="cmt">// always logs 0 — closure captured first-render value</span>
+  }, 1000);
+  return () =&gt; clearInterval(id);
+}, []);  <span class="cmt">// 👈 empty deps</span></code></pre>
+
+    <div class="label-good">prefer — functional setter or ref</div>
+<pre><code>useEffect(() =&gt; {
+  const id = setInterval(() =&gt; {
+    setCount((c) =&gt; c + 1);  <span class="cmt">// functional update — no stale capture</span>
+  }, 1000);
+  return () =&gt; clearInterval(id);
+}, []);
+
+<span class="cmt">// Or via ref when you need to read it</span>
+const countRef = useRef(count);
+countRef.current = count;</code></pre>
+
+    <!-- ============ EFFECT CASCADE ============ -->
+    <h2 id="effect-cascade">useEffect cascade (avoid)</h2>
+    <div class="label-bad">avoid — state ping-pong</div>
+<pre><code>const [a, setA] = useState(0);
+const [b, setB] = useState(0);
+
+useEffect(() =&gt; { setB(a * 2); }, [a]);    <span class="cmt">// triggers another render</span>
+useEffect(() =&gt; { setA(b + 1); }, [b]);    <span class="cmt">// infinite loop</span></code></pre>
+
+    <div class="label-good">prefer — derive in render</div>
+<pre><code>const [a, setA] = useState(0);
+const b = a * 2;   <span class="cmt">// or useMemo if expensive</span></code></pre>
+
+    <!-- ============ FLATLIST PROPS ============ -->
+    <h2 id="flatlist-props">FlatList — perf props</h2>
+    <table>
+      <thead><tr><th>Prop</th><th>Default</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>keyExtractor</code></td><td>uses index</td><td>Return a stable id. Index keys break <code>memo</code> when items reorder.</td></tr>
+        <tr><td><code>getItemLayout</code></td><td>—</td><td>Provide if row height is fixed. Skips measurement; enables instant <code>scrollToIndex</code>.</td></tr>
+        <tr><td><code>initialNumToRender</code></td><td>10</td><td>Lower on cold start if rows are heavy.</td></tr>
+        <tr><td><code>windowSize</code></td><td>21</td><td>Viewports rendered around visible. Lower = less memory; higher = fewer blanks.</td></tr>
+        <tr><td><code>maxToRenderPerBatch</code></td><td>10</td><td>Rows per batch. Lower = smoother scroll, slower fill.</td></tr>
+        <tr><td><code>updateCellsBatchingPeriod</code></td><td>50ms</td><td>Throttle for batches.</td></tr>
+        <tr><td><code>removeClippedSubviews</code></td><td>false</td><td>Detaches off-screen native views. Test for unmount issues.</td></tr>
+        <tr><td><code>ListEmptyComponent</code></td><td>—</td><td>Cheaper than conditional JSX above the list.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ============ FLATLIST ROW ============ -->
+    <h2 id="flatlist-row">Memoized row + stable handlers</h2>
+<pre><code>const Row = memo(function Row({ item, onPress }: {
+  item: Item;
+  onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(item.id)} style={styles.row}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+function Screen({ items }: { items: Item[] }) {
+  const onPressRow = useCallback((id: string) =&gt; console.log(id), []);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo&lt;Item&gt;) =&gt; &lt;Row item={item} onPress={onPressRow} /&gt;,
+    [onPressRow]
+  );
+
+  const keyExtractor = useCallback((i: Item) =&gt; i.id, []);
+
+  const getItemLayout = useCallback(
+    (_: ArrayLike&lt;Item&gt; | null | undefined, index: number) =&gt;
+      ({ length: 64, offset: 64 * index, index }),
+    []
+  );
+
+  return (
+    &lt;FlatList
+      data={items}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      getItemLayout={getItemLayout}
+      initialNumToRender={10}
+      windowSize={11}
+      removeClippedSubviews
+    /&gt;
+  );
+}</code></pre>
+
+    <!-- ============ ABORT ============ -->
+    <h2 id="abort">AbortController</h2>
+<pre><code>useEffect(() =&gt; {
+  const ac = new AbortController();
+
+  fetch(url, { signal: ac.signal })
+    .then((r) =&gt; r.json())
+    .then((data) =&gt; { /* setState only if needed */ })
+    .catch((e) =&gt; { if (e.name !== 'AbortError') console.error(e); });
+
+  return () =&gt; ac.abort();
+}, [url]);</code></pre>
+
+    <!-- ============ CLEANUP ============ -->
+    <h2 id="cleanup">Timer / subscription cleanup</h2>
+<pre><code>useEffect(() =&gt; {
+  const id = setInterval(tick, 1000);
+  return () =&gt; clearInterval(id);
+}, []);
+
+useEffect(() =&gt; {
+  const sub = emitter.addListener('event', handler);
+  return () =&gt; sub.remove();
+}, []);
+
+useEffect(() =&gt; {
+  const sub = AppState.addEventListener('change', onChange);
+  return () =&gt; sub.remove();
+}, []);</code></pre>
+
+    <!-- ============ MOUNTED ============ -->
+    <h2 id="mounted">isMounted guard</h2>
+    <p class="note">Prefer AbortController for fetch. Use this when you can't cancel the work (e.g. timers, third-party callbacks).</p>
+<pre><code>useEffect(() =&gt; {
+  let isMounted = true;
+
+  doAsyncWork().then((result) =&gt; {
+    if (!isMounted) return;
+    setData(result);
+  });
+
+  return () =&gt; { isMounted = false; };
+}, []);</code></pre>
+
+    <!-- ============ ANIMATION ============ -->
+    <h2 id="animation">Animation</h2>
+    <p class="note">Animate <code>transform</code> and <code>opacity</code> on the native driver. Avoid animating <code>width</code>, <code>height</code>, <code>top</code>, <code>left</code> — they cross the bridge each frame.</p>
+<pre><code>import { Animated } from 'react-native';
+
+const opacity = useRef(new Animated.Value(0)).current;
+
+useEffect(() =&gt; {
+  Animated.timing(opacity, {
+    toValue: 1,
+    duration: 250,
+    useNativeDriver: true,   <span class="cmt">// 👈 always when animating transform/opacity</span>
+  }).start();
+}, [opacity]);
+
+&lt;Animated.View style={{ opacity, transform: [{ translateY: opacity.interpolate({
+  inputRange: [0, 1], outputRange: [20, 0]
+}) }] }} /&gt;</code></pre>
+
+    <!-- ============ IMAGES ============ -->
+    <h2 id="images">Images</h2>
+<pre><code><span class="cmt">// Always set explicit width / height — lets the decoder downsample</span>
+&lt;Image
+  source={{ uri }}
+  style={{ width: 80, height: 80 }}
+  resizeMode="cover"
+/&gt;
+
+<span class="cmt">// For lists: prefer expo-image or react-native-fast-image — they handle</span>
+<span class="cmt">// memory pressure and caching better than the core Image component.</span>
+import { Image } from 'expo-image';
+
+&lt;Image source={uri} style={{ width: 80, height: 80 }} contentFit="cover" /&gt;</code></pre>
+    <p class="note">If the server returns 4K images for an 80×80 view, the decoder still allocates a full-size bitmap. Ask the backend for a thumbnail variant.</p>
+
+    <!-- ============ INTERACTION ============ -->
+    <h2 id="interaction">InteractionManager.runAfterInteractions</h2>
+<pre><code>import { InteractionManager } from 'react-native';
+
+useEffect(() =&gt; {
+  const handle = InteractionManager.runAfterInteractions(() =&gt; {
+    <span class="cmt">// expensive work runs after navigation transition finishes</span>
+    doHeavySetup();
+  });
+  return () =&gt; handle.cancel();
+}, []);</code></pre>
+
+    <!-- ============ LAZY ============ -->
+    <h2 id="lazy">Lazy / dynamic import</h2>
+<pre><code>import React, { lazy, Suspense } from 'react';
+
+const HeavyChart = lazy(() =&gt; import('./HeavyChart'));
+
+&lt;Suspense fallback={&lt;ActivityIndicator /&gt;}&gt;
+  &lt;HeavyChart /&gt;
+&lt;/Suspense&gt;</code></pre>
+
+    <!-- ============ DEV TRAPS ============ -->
+    <h2 id="dev-traps">Dev-only traps</h2>
+    <table>
+      <thead><tr><th>Trap</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>console.log</code> in render path</td><td>Each call serializes args + crosses bridge in dev. Strip in production builds.</td></tr>
+        <tr><td>Remote JS debugger attached</td><td>Runs JS in Chrome V8, not Hermes — perf numbers are not representative.</td></tr>
+        <tr><td>Dev mode warnings</td><td>StrictMode double-invokes effects/renders in dev only. Measure in release.</td></tr>
+        <tr><td>Source maps + symbolication</td><td>Profile release builds with source maps so flamegraph names are readable.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>
