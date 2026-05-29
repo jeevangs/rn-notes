@@ -131,6 +131,11 @@
       <li><a href="#form-validation">Validation pattern</a></li>
       <li><a href="#form-submit">Submit with disabled state</a></li>
 
+      <li><a class="group">Capture &amp; lists</a></li>
+      <li><a href="#wizard">Multi-step form (wizard)</a></li>
+      <li><a href="#camera-scan">Camera + barcode scan</a></li>
+      <li><a href="#section-list">SectionList + swipe</a></li>
+
       <li><a class="group">UI primitives</a></li>
       <li><a href="#pressable">Pressable (debounce)</a></li>
       <li><a href="#modal">Modal + overlay</a></li>
@@ -534,6 +539,160 @@ const onSubmit = async () =&gt; {
     ? &lt;ActivityIndicator color="#fff" /&gt;
     : &lt;Text style={styles.buttonText}&gt;Log in&lt;/Text&gt;}
 &lt;/Pressable&gt;</code></pre>
+
+    <!-- ============ CAPTURE & LISTS ============ -->
+    <h2 id="wizard">Multi-step form (wizard)</h2>
+    <p class="note">Step index + per-step validation gate + progress + review/submit. On submit, hand off to the offline outbox so it survives no-signal. (<code>useReducer</code> is an alternative to the <code>useState</code> step machine for richer transitions.)</p>
+<pre><code>type StepKey = 'details' | 'measurements' | 'photos' | 'review';
+const STEPS: StepKey[] = ['details', 'measurements', 'photos', 'review'];
+
+type SiteForm = {
+  siteName: string;
+  voltage: string;
+  photoUris: string[];
+};
+
+const initialForm: SiteForm = { siteName: '', voltage: '', photoUris: [] };
+
+<span class="cmt">// per-step gate: can we advance from this step?</span>
+function canAdvance(step: StepKey, d: SiteForm): boolean {
+  switch (step) {
+    case 'details':      return d.siteName.trim().length &gt; 0;
+    case 'measurements': return Number(d.voltage) &gt; 0;
+    case 'photos':       return d.photoUris.length &gt; 0;
+    case 'review':       return true;
+  }
+}
+
+function Wizard() {
+  const [index, setIndex] = useState(0);
+  const [form, setForm] = useState&lt;SiteForm&gt;(initialForm);
+  const step = STEPS[index];
+  const isLast = index === STEPS.length - 1;
+
+  const update = (patch: Partial&lt;SiteForm&gt;) =&gt; setForm((d) =&gt; ({ ...d, ...patch }));
+  const next = () =&gt; { if (canAdvance(step, form) &amp;&amp; !isLast) setIndex((i) =&gt; i + 1); };
+  const back = () =&gt; setIndex((i) =&gt; Math.max(0, i - 1));
+
+  const submit = () =&gt; {
+    enqueue({                                  <span class="cmt">// offline outbox (see RQ patterns)</span>
+      idempotencyKey: `assessment-${Date.now()}`,
+      url: `${API_URL}/assessments`,
+      method: 'POST',
+      body: form,
+    });
+  };
+
+  return (
+    &lt;View style={{ flex: 1 }}&gt;
+      &lt;WizardProgress total={STEPS.length} current={index} /&gt;
+
+      {step === 'details'      &amp;&amp; &lt;DetailsStep form={form} onChange={update} /&gt;}
+      {step === 'measurements' &amp;&amp; &lt;MeasureStep form={form} onChange={update} /&gt;}
+      {step === 'photos'       &amp;&amp; &lt;PhotosStep  form={form} onChange={update} /&gt;}
+      {step === 'review'       &amp;&amp; &lt;ReviewStep  form={form} /&gt;}
+
+      &lt;View style={styles.navRow}&gt;
+        {index &gt; 0 &amp;&amp; (
+          &lt;Pressable onPress={back} style={styles.navBtn}&gt;&lt;Text&gt;Back&lt;/Text&gt;&lt;/Pressable&gt;
+        )}
+        {isLast ? (
+          &lt;Pressable onPress={submit} style={styles.navBtn}&gt;&lt;Text&gt;Submit&lt;/Text&gt;&lt;/Pressable&gt;
+        ) : (
+          &lt;Pressable onPress={next} disabled={!canAdvance(step, form)} style={styles.navBtn}&gt;
+            &lt;Text&gt;Next&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        )}
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+}
+
+function WizardProgress({ total, current }: { total: number; current: number }) {
+  return (
+    &lt;View style={styles.progressRow}&gt;
+      {Array.from({ length: total }, (_, i) =&gt; (
+        &lt;View key={i} style={[styles.dot, i &lt;= current &amp;&amp; styles.dotActive]} /&gt;
+      ))}
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+    <h2 id="camera-scan">Camera + barcode scan</h2>
+    <p class="note"><code>expo-camera</code>: permission gate, live scanner with duplicate-read debounce, and photo capture into the form.</p>
+<pre><code>import { CameraView, useCameraPermissions } from 'expo-camera';
+
+function ScanScreen({ onScanned }: { onScanned: (code: string) =&gt; void }) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const lastRef = useRef(0);
+
+  if (!permission) return null;                  <span class="cmt">// permission still loading</span>
+  if (!permission.granted) {
+    return (
+      &lt;View style={styles.center}&gt;
+        &lt;Text&gt;Camera access is needed to scan equipment.&lt;/Text&gt;
+        &lt;Pressable onPress={requestPermission}&gt;&lt;Text&gt;Grant access&lt;/Text&gt;&lt;/Pressable&gt;
+      &lt;/View&gt;
+    );
+  }
+
+  const handleScan = ({ data }: { data: string }) =&gt; {
+    const now = Date.now();
+    if (now - lastRef.current &lt; 1500) return;    <span class="cmt">// debounce duplicate reads</span>
+    lastRef.current = now;
+    onScanned(data);
+  };
+
+  return (
+    &lt;CameraView
+      style={{ flex: 1 }}
+      barcodeScannerSettings={{ barcodeTypes: ['qr', 'code128', 'ean13'] }}
+      onBarcodeScanned={handleScan}
+    /&gt;
+  );
+}</code></pre>
+    <p class="note">Photo capture into the wizard:</p>
+<pre><code>const camRef = useRef&lt;CameraView&gt;(null);
+
+const takePhoto = async () =&gt; {
+  const photo = await camRef.current?.takePictureAsync({ quality: 0.6 });
+  if (photo) update({ photoUris: [...form.photoUris, photo.uri] });
+};
+
+&lt;CameraView ref={camRef} style={{ flex: 1 }} facing="back" /&gt;</code></pre>
+
+    <h2 id="section-list">SectionList + swipe actions</h2>
+    <p class="note">Grouped data with sticky headers; <code>Swipeable</code> (gesture-handler) for row actions like retry / delete.</p>
+<pre><code>import { SectionList } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+
+type Section = { title: string; data: Item[] };
+
+const sections: Section[] = [
+  { title: 'Pending',  data: pending },
+  { title: 'Complete', data: complete },
+];
+
+&lt;SectionList
+  sections={sections}
+  keyExtractor={(item) =&gt; item.id}
+  renderItem={({ item }) =&gt; (
+    &lt;Swipeable
+      renderRightActions={() =&gt; (
+        &lt;Pressable style={styles.deleteAction} onPress={() =&gt; onDelete(item.id)}&gt;
+          &lt;Text style={styles.deleteText}&gt;Delete&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      )}
+    &gt;
+      &lt;Row item={item} /&gt;
+    &lt;/Swipeable&gt;
+  )}
+  renderSectionHeader={({ section }) =&gt; (
+    &lt;Text style={styles.sectionHeader}&gt;{section.title}&lt;/Text&gt;
+  )}
+  stickySectionHeadersEnabled
+/&gt;</code></pre>
+    <p class="note">Newer gesture-handler exposes <code>ReanimatedSwipeable</code> with the same props shape.</p>
 
     <!-- ============ UI PRIMITIVES ============ -->
     <h2 id="pressable">Pressable with double-tap debounce</h2>

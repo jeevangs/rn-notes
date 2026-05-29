@@ -152,6 +152,12 @@
       <li><a class="group">Startup</a></li>
       <li><a href="#lazy">Lazy / dynamic import</a></li>
       <li><a href="#dev-traps">Dev-only traps</a></li>
+
+      <li><a class="group">Profiling &amp; threads</a></li>
+      <li><a href="#flamegraph">Reading a flamegraph</a></li>
+      <li><a href="#thread-isolation">JS vs UI thread</a></li>
+      <li><a href="#android-only">Janky only on Android</a></li>
+      <li><a href="#selector-fanout">Render fan-out (selectors)</a></li>
     </ul>
   </aside>
 
@@ -503,6 +509,65 @@ const HeavyChart = lazy(() =&gt; import('./HeavyChart'));
         <tr><td>Source maps + symbolication</td><td>Profile release builds with source maps so flamegraph names are readable.</td></tr>
       </tbody>
     </table>
+
+    <!-- ============ FLAMEGRAPH ============ -->
+    <h2 id="flamegraph">Reading a flamegraph (Hermes sampling profiler)</h2>
+    <p class="note">Capture a CPU profile on-device, then read it to find the hot path — instead of guessing.</p>
+    <h3>Capture</h3>
+    <ul>
+      <li>Dev Menu → <strong>Start Sampling Profiler</strong>; reproduce the slow interaction; <strong>Stop</strong> → writes a <code>.cpuprofile</code> on the device.</li>
+      <li>Pull it to the host (<code>adb pull</code> on Android; the Dev Menu surfaces the path on iOS) and open in Chrome DevTools → Performance → Load, or the Flipper Hermes debugger.</li>
+      <li>Profile a <strong>release</strong> build with source maps so frames are named, not minified.</li>
+    </ul>
+    <h3>Read</h3>
+    <ul>
+      <li><strong>Width = time.</strong> The widest frames are where time goes; a wide leaf at the bottom is the hot function.</li>
+      <li><strong>Self vs total.</strong> Total includes children, self is the function itself. Wide bar + wide child → the child is the cost. Wide bar + no children → that function is the cost.</li>
+      <li><strong>Tall &amp; thin = deep call stack</strong> (usually fine). <strong>Wide &amp; flat = a hot loop or a function called too often.</strong></li>
+      <li>Map the widest non-React frame back to a component/util. Usual culprits: <code>JSON.parse</code> of a large payload, an unmemoized derivation re-running each render, a comparator in a sort.</li>
+    </ul>
+    <p class="note"><strong>Blind spot:</strong> the Hermes profiler only sees the <strong>JS thread</strong>. If JS looks idle but frames still drop, the cost is on the UI/native side — switch to Xcode Instruments (Time Profiler) or Android Studio CPU profiler / Perfetto.</p>
+
+    <!-- ============ THREAD ISOLATION ============ -->
+    <h2 id="thread-isolation">JS thread vs UI thread — proving which is starved</h2>
+    <p class="note">"How do you know it's the JS thread?" The in-app Perf Monitor (Dev Menu → Show Perf Monitor) shows two FPS numbers.</p>
+    <table>
+      <thead><tr><th>Reading</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>JS FPS low, UI FPS fine</td><td>Your logic / re-renders / a large parse are blocking the JS thread. Confirm with the sampling profiler.</td></tr>
+        <tr><td>UI FPS also low</td><td>Native / layout / GPU work — long lists without virtualization, overdraw/shadows, oversized images.</td></tr>
+        <tr><td>UI fine, JS pinned during a gesture/animation</td><td>The animation is running on the JS thread — move it to the UI thread (Reanimated worklet, or <code>useNativeDriver</code>).</td></tr>
+      </tbody>
+    </table>
+    <p class="note">The three RN threads: <strong>JS</strong> (your code, renders, business logic), <strong>main / UI</strong> (native views, gestures, touch), <strong>shadow</strong> (Yoga layout). Crossings between them cost — that's the budget you're protecting.</p>
+
+    <!-- ============ ANDROID ONLY ============ -->
+    <h2 id="android-only">"Janky only on Android" — divergence checklist</h2>
+    <p class="note">Same JS, same data, smooth on iOS, drops frames on Android. Ranked suspects:</p>
+    <ul>
+      <li><strong>Image memory.</strong> Android per-app heap is capped (often 256–512MB; <code>largeHeap</code> is opt-in). A decoded bitmap is W×H×4 bytes regardless of file size, so full-res photos OOM / GC-churn on Android first. Fix: explicit dimensions, server thumbnails, expo-image cache.</li>
+      <li><strong>Overdraw / elevation.</strong> Shadows (<code>elevation</code>) and stacked translucent layers re-rasterize more expensively on Android. Use the GPU-overdraw debug overlay.</li>
+      <li><strong>Entry-tier hardware.</strong> Test devices skew premium; a JS-thread budget that's fine on a flagship blows on a low-end Android chip.</li>
+      <li><strong><code>removeClippedSubviews</code></strong> behaves differently per platform; toggling it can fix or cause Android-only blank cells.</li>
+      <li><strong>Release-only differences.</strong> R8/ProGuard + Hermes bytecode differ from debug — always confirm jank on a release build.</li>
+    </ul>
+    <p class="note">Tools: Android Studio Profiler, <code>adb shell dumpsys gfxinfo &lt;pkg&gt;</code> for frame stats, Perfetto / systrace for the frame timeline.</p>
+
+    <!-- ============ SELECTOR FANOUT ============ -->
+    <h2 id="selector-fanout">Render fan-out — only the changed item re-renders</h2>
+    <p class="note">A dashboard of live tiles where every update re-renders ALL tiles. Subscribe each tile to only its own slice.</p>
+    <div class="label-bad">avoid — whole-collection selector</div>
+<pre><code>const all = useStore((s) =&gt; s.byId);     <span class="cmt">// new ref on any change -&gt; every consumer re-renders</span>
+return ids.map((id) =&gt; &lt;Tile key={id} value={all[id]} /&gt;);</code></pre>
+    <div class="label-good">prefer — per-id selector inside a memoized tile</div>
+<pre><code>const Tile = memo(function Tile({ id }: { id: string }) {
+  const value = useStore((s) =&gt; s.byId[id]);   <span class="cmt">// re-renders only when THIS id changes</span>
+  return &lt;Text&gt;{value?.battery}&lt;/Text&gt;;
+});
+
+<span class="cmt">// parent passes only ids; each tile subscribes itself</span>
+return ids.map((id) =&gt; &lt;Tile key={id} id={id} /&gt;);</code></pre>
+    <p class="note">For object/array slices, add a shallow comparator (<code>useStore(sel, shallow)</code>) so a new wrapper ref with equal contents doesn't re-render. Pair with a non-reactive buffer that coalesces high-frequency (e.g. 5Hz) updates before they hit the store.</p>
 
   </main>
 
