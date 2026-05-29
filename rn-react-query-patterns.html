@@ -144,6 +144,15 @@
       <li><a href="#orchestration">Mutation orchestration</a></li>
       <li><a href="#cache-strategy">Cache strategy</a></li>
 
+      <li><a class="group">Validation &amp; Offline</a></li>
+      <li><a href="#zod-boundary">Boundary validation (Zod)</a></li>
+      <li><a href="#offline-outbox">Offline outbox queue</a></li>
+
+      <li><a class="group">BFF / SDUI</a></li>
+      <li><a href="#why-bff">Why a BFF</a></li>
+      <li><a href="#sdui">Server-driven UI</a></li>
+      <li><a href="#stale-by-data">staleTime by data class</a></li>
+
       <li><a class="group">Reference</a></li>
       <li><a href="#errors">Error + loading</a></li>
       <li><a href="#full">Full screen example</a></li>
@@ -740,6 +749,172 @@ const onLogout = () =&gt; {
   qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'user' });
   qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'items' });
 };</code></pre>
+
+    <!-- ============ ZOD BOUNDARY ============ -->
+    <h2 id="zod-boundary">Boundary validation (Zod)</h2>
+    <p class="note">Validate the response shape at the network boundary, not deep in the UI. <code>parse</code> throws on mismatch (use for internal API contracts); <code>safeParse</code> returns a result object (use for input you want to branch on).</p>
+<pre><code>import { z } from 'zod';
+
+const ItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.number(),
+});
+const ItemsSchema = z.array(ItemSchema);
+
+type Item = z.infer&lt;typeof ItemSchema&gt;;   <span class="cmt">// schema is the single source of truth for the type</span>
+
+async function getItems(signal?: AbortSignal): Promise&lt;Item[]&gt; {
+  const r = await fetch(`${API_URL}/items`, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return ItemsSchema.parse(await r.json());   <span class="cmt">// throws -&gt; RQ surfaces it as a query error</span>
+}
+
+<span class="cmt">// safeParse when you want to branch instead of throw</span>
+const parsed = ItemSchema.safeParse(json);
+if (!parsed.success) {
+  console.warn(parsed.error.flatten());
+  return fallback;
+}
+return parsed.data;</code></pre>
+    <p class="note">A schema mismatch becomes a normal query/mutation error, so the existing error UI handles it — no separate code path.</p>
+
+    <!-- ============ OFFLINE OUTBOX ============ -->
+    <h2 id="offline-outbox">Offline outbox queue</h2>
+    <p class="note">Queue writes while offline, persist them, drain in order when connectivity returns. Each job carries a stable idempotency key generated once at enqueue, so a retry after a flaky connection can't double-apply.</p>
+<pre><code>import NetInfo from '@react-native-community/netinfo';
+import { MMKV } from 'react-native-mmkv';
+
+const storage = new MMKV();
+const KEY = 'outbox';
+
+type Job = {
+  idempotencyKey: string;   <span class="cmt">// identity + sent on every retry</span>
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body: unknown;
+  attempts: number;
+};
+
+function load(): Job[] {
+  const raw = storage.getString(KEY);
+  return raw ? (JSON.parse(raw) as Job[]) : [];
+}
+function save(jobs: Job[]) {
+  storage.set(KEY, JSON.stringify(jobs));
+}
+
+let draining = false;
+
+export function enqueue(job: Omit&lt;Job, 'attempts'&gt;) {
+  const jobs = load();
+  jobs.push({ ...job, attempts: 0 });
+  save(jobs);
+  void drain();                       <span class="cmt">// try now; no-op if offline</span>
+}
+
+export async function drain(): Promise&lt;void&gt; {
+  if (draining) return;               <span class="cmt">// single drainer</span>
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) return;
+  draining = true;
+  try {
+    let jobs = load();
+    while (jobs.length) {
+      const job = jobs[0];            <span class="cmt">// FIFO — preserve order</span>
+      try {
+        const r = await fetch(job.url, {
+          method: job.method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': job.idempotencyKey,
+          },
+          body: JSON.stringify(job.body),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        jobs = jobs.slice(1);         <span class="cmt">// success -&gt; drop head</span>
+        save(jobs);
+      } catch {
+        jobs[0] = { ...job, attempts: job.attempts + 1 };
+        save(jobs);
+        break;                        <span class="cmt">// stop; retry on next reconnect</span>
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+<span class="cmt">// Drain whenever connectivity is restored</span>
+NetInfo.addEventListener((state) =&gt; {
+  if (state.isConnected) void drain();
+});</code></pre>
+    <p class="note">Pair with an optimistic cache write so the UI updates immediately; the server reconciles when the job drains. Same idempotency key on replay means a double-send is deduped server-side.</p>
+
+    <!-- ============ WHY BFF ============ -->
+    <h2 id="why-bff">Why a BFF (backend-for-frontend)</h2>
+    <p class="note">One client-shaped endpoint instead of the app orchestrating N service calls.</p>
+    <table>
+      <thead><tr><th>Reason</th><th>What it buys the client</th></tr></thead>
+      <tbody>
+        <tr><td>Aggregation</td><td>BFF fans out to many services, returns one response — the app makes a single round-trip (latency + battery win on cellular).</td></tr>
+        <tr><td>Shaping</td><td>Payload trimmed to exactly what the screen needs — no over-fetch, smaller responses.</td></tr>
+        <tr><td>Version decoupling</td><td>Contract is owned per client, so the app payload evolves without touching core services; old app versions keep working.</td></tr>
+        <tr><td>Topology hiding</td><td>Client never learns which services exist or how they're split.</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ============ SDUI ============ -->
+    <h2 id="sdui">Server-driven UI (component registry)</h2>
+    <p class="note">Server sends a tree of typed nodes; the client maps each <code>type</code> to a component. Unknown types render null, so a new server widget never crashes an old client — that is what makes server-driven rollout safe.</p>
+<pre><code>type UINode = {
+  type: string;
+  props?: Record&lt;string, unknown&gt;;
+  children?: UINode[];
+};
+
+const registry: Record&lt;string, React.FC&lt;any&gt;&gt; = {
+  text:   ({ value }) =&gt; &lt;Text&gt;{value}&lt;/Text&gt;,
+  button: ({ label, onPress }) =&gt; &lt;Pressable onPress={onPress}&gt;&lt;Text&gt;{label}&lt;/Text&gt;&lt;/Pressable&gt;,
+  stack:  ({ children }) =&gt; &lt;View&gt;{children}&lt;/View&gt;,
+};
+
+function renderNode(node: UINode): React.ReactNode {
+  const Comp = registry[node.type];
+  if (!Comp) return null;                 <span class="cmt">// unknown type -&gt; ignore, don't crash</span>
+  const kids = node.children?.map((c, i) =&gt; (
+    &lt;React.Fragment key={i}&gt;{renderNode(c)}&lt;/React.Fragment&gt;
+  ));
+  return &lt;Comp {...node.props}&gt;{kids}&lt;/Comp&gt;;
+}
+
+<span class="cmt">// Validate the layout payload at the boundary, then render:</span>
+const LayoutSchema: z.ZodType&lt;UINode&gt; = z.lazy(() =&gt;
+  z.object({
+    type: z.string(),
+    props: z.record(z.unknown()).optional(),
+    children: z.array(LayoutSchema).optional(),
+  })
+);
+
+function Screen({ json }: { json: unknown }) {
+  const tree = LayoutSchema.parse(json);
+  return &lt;&gt;{renderNode(tree)}&lt;/&gt;;
+}</code></pre>
+    <p class="note">Evolve additively: add new node types, never repurpose an existing one. Old clients ignore types they don't know; new clients render them.</p>
+
+    <!-- ============ STALE BY DATA ============ -->
+    <h2 id="stale-by-data">staleTime by data class</h2>
+    <table>
+      <thead><tr><th>Data</th><th>staleTime</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Live / streaming values</td><td><code>0</code> + push updates</td><td>Always stale; driven by WebSocket, not refetch.</td></tr>
+        <tr><td>Lists that change often</td><td><code>~30s</code></td><td>Cheap refetch on focus without spam.</td></tr>
+        <tr><td>User / profile</td><td><code>~5min</code></td><td>Rarely changes within a session.</td></tr>
+        <tr><td>Static config / reference</td><td><code>~1h</code> / Infinity</td><td>Effectively immutable per session.</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><code>staleTime</code> = how long data is considered fresh (no refetch). <code>gcTime</code> = how long an unobserved query stays cached before eviction. Independent knobs.</p>
 
   </main>
 
