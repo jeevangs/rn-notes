@@ -136,6 +136,14 @@
       <li><a href="#flatlist">FlatList — perf props</a></li>
       <li><a href="#memoization">memo / useMemo / useCallback</a></li>
 
+      <li><a class="group">Integration</a></li>
+      <li><a href="#idempotency">Idempotency keys</a></li>
+      <li><a href="#polling">Polling (refetchInterval)</a></li>
+      <li><a href="#token-refresh">Token refresh on 401</a></li>
+      <li><a href="#dedup">Request deduplication</a></li>
+      <li><a href="#orchestration">Mutation orchestration</a></li>
+      <li><a href="#cache-strategy">Cache strategy</a></li>
+
       <li><a class="group">Reference</a></li>
       <li><a href="#errors">Error + loading</a></li>
       <li><a href="#full">Full screen example</a></li>
@@ -575,6 +583,163 @@ const styles = StyleSheet.create({
   button: { padding: 8, backgroundColor: '#eee', borderRadius: 6 },
   row: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
 });</code></pre>
+
+    <!-- ============ IDEMPOTENCY ============ -->
+    <h2 id="idempotency">Idempotency keys (mutation header)</h2>
+    <p class="note">Server-side dedupes retries / double-taps by client-generated UUID. Same key + same operation = same result, no double-processing.</p>
+<pre><code>function makeIdempotencyKey(): string {
+  return 'idem-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+async function sendCommand(input: { vehicleId: string; action: string }): Promise&lt;Result&gt; {
+  const idempotencyKey = makeIdempotencyKey();
+  const r = await fetch(`${API_URL}/command`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+<span class="cmt">// Pair with useMutation — RQ's built-in retry will reuse the SAME key on retry</span>
+<span class="cmt">// because the mutation variables (input) are stable. Server treats retry as duplicate.</span>
+const mutation = useMutation({
+  mutationFn: sendCommand,
+  retry: 2,
+});</code></pre>
+    <p class="note">For client-controlled keys that persist across re-renders, hoist the key generation into <code>onMutate</code> and store it in the context.</p>
+
+    <!-- ============ POLLING ============ -->
+    <h2 id="polling">Polling (refetchInterval — stop on terminal state)</h2>
+<pre><code>type JobStatus = 'pending' | 'running' | 'completed' | 'failed';
+type Job = { id: string; status: JobStatus; result?: unknown };
+
+const { data: job } = useQuery&lt;Job, Error&gt;({
+  queryKey: ['job', jobId],
+  queryFn: ({ signal }) =&gt; fetchJob(jobId, signal),
+  refetchInterval: (query) =&gt; {
+    const status = query.state.data?.status;
+    if (status === 'completed' || status === 'failed') return false; <span class="cmt">// stop</span>
+    return 2000; <span class="cmt">// poll every 2s while pending/running</span>
+  },
+  refetchIntervalInBackground: false,
+});</code></pre>
+
+    <!-- ============ TOKEN REFRESH ============ -->
+    <h2 id="token-refresh">Token refresh on 401</h2>
+    <p class="note">Single in-flight refresh — all 401-failed requests await the same refresh promise.</p>
+<pre><code>let refreshPromise: Promise&lt;string&gt; | null = null;
+
+async function getAccessToken(): Promise&lt;string&gt; {
+  if (refreshPromise) return refreshPromise; <span class="cmt">// dedupe concurrent refreshes</span>
+
+  refreshPromise = (async () =&gt; {
+    const refreshToken = await SecureStore.getItemAsync('refresh');
+    const r = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!r.ok) throw new Error('refresh failed');
+    const { access } = await r.json();
+    await SecureStore.setItemAsync('access', access);
+    return access;
+  })();
+
+  try { return await refreshPromise; }
+  finally { refreshPromise = null; }
+}
+
+async function authedFetch(url: string, init: RequestInit = {}): Promise&lt;Response&gt; {
+  let token = await SecureStore.getItemAsync('access');
+  let r = await fetch(url, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${token}` },
+  });
+
+  if (r.status === 401) {
+    token = await getAccessToken();   <span class="cmt">// refresh once, then retry</span>
+    r = await fetch(url, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${token}` },
+    });
+  }
+  return r;
+}</code></pre>
+
+    <!-- ============ DEDUP ============ -->
+    <h2 id="dedup">Request deduplication (RQ built-in)</h2>
+    <p class="note">React Query already dedupes — multiple components calling <code>useQuery</code> with the same key share one in-flight request. This is one of the strongest reasons to use RQ over hand-rolled <code>useEffect + fetch</code>.</p>
+<pre><code><span class="cmt">// Screen A and Screen B both mount and both call:</span>
+useQuery({ queryKey: ['user', userId], queryFn: () =&gt; getUser(userId) });
+
+<span class="cmt">// → ONE network request. Both screens get the same data from the cache.</span>
+<span class="cmt">// → On `staleTime` expiration, both subscribe to the next refetch.</span></code></pre>
+    <p class="note">For non-RQ fetches that need dedup (e.g., custom hook), use a module-scoped <code>Map&lt;key, Promise&gt;</code> — same pattern as the token refresh above.</p>
+
+    <!-- ============ ORCHESTRATION ============ -->
+    <h2 id="orchestration">Mutation orchestration (parallel + dependent)</h2>
+
+    <h3>Parallel — independent mutations fire together</h3>
+<pre><code>const a = useMutation({ mutationFn: stepA });
+const b = useMutation({ mutationFn: stepB });
+
+const onSubmit = async () =&gt; {
+  await Promise.all([a.mutateAsync(inputA), b.mutateAsync(inputB)]);
+};</code></pre>
+
+    <h3>Dependent — B needs A's result</h3>
+<pre><code>const onSubmit = async () =&gt; {
+  try {
+    const aResult = await a.mutateAsync(inputA);
+    const bResult = await b.mutateAsync({ ...inputB, aId: aResult.id });
+    return bResult;
+  } catch (err) {
+    <span class="cmt">// rollback strategy goes here — undo aResult if b failed</span>
+    throw err;
+  }
+};</code></pre>
+
+    <h3>Fire-and-forget alongside critical path</h3>
+<pre><code>const onSubmit = async () =&gt; {
+  const critical = await mainMutation.mutateAsync(input);
+  void analytics.mutateAsync({ event: 'submitted', payload: critical }); <span class="cmt">// don't await</span>
+  return critical;
+};</code></pre>
+
+    <!-- ============ CACHE STRATEGY ============ -->
+    <h2 id="cache-strategy">Cache strategy — invalidate vs setQueryData vs refetch</h2>
+    <table>
+      <thead><tr><th>Action</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>invalidateQueries</code></td><td>Server is source of truth. Mark stale + refetch on next observer.</td></tr>
+        <tr><td><code>setQueryData</code></td><td>You know the exact new shape (e.g., after a confirmed mutation response). Skips the network round-trip.</td></tr>
+        <tr><td><code>refetchQueries</code></td><td>Force immediate refetch (foreground), not just stale-marking.</td></tr>
+        <tr><td><code>removeQueries</code></td><td>Cache should be wiped (logout, account switch).</td></tr>
+        <tr><td><code>resetQueries</code></td><td>Reset to initial state (loading) and refetch.</td></tr>
+      </tbody>
+    </table>
+<pre><code><span class="cmt">// Confirmed mutation — directly write the response (saves a refetch)</span>
+onSuccess: (serverItem) =&gt; {
+  qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt;
+    old.map(i =&gt; i.id === serverItem.id ? serverItem : i)
+  );
+}
+
+<span class="cmt">// Mutation that affects related queries — invalidate broadly</span>
+onSuccess: () =&gt; {
+  qc.invalidateQueries({ queryKey: ['items'] });        <span class="cmt">// items list</span>
+  qc.invalidateQueries({ queryKey: ['itemCount'] });    <span class="cmt">// derived count</span>
+}
+
+<span class="cmt">// Logout — wipe everything user-specific</span>
+const onLogout = () =&gt; {
+  qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'user' });
+  qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'items' });
+};</code></pre>
 
   </main>
 

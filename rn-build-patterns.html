@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>React Native Build Patterns</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Build Patterns</h1>
+    <ul>
+      <li><a class="group">Layout</a></li>
+      <li><a href="#safearea">SafeAreaView</a></li>
+      <li><a href="#keyboard">KeyboardAvoidingView</a></li>
+      <li><a href="#flex">Flex layout</a></li>
+
+      <li><a class="group">Chat</a></li>
+      <li><a href="#chat-types">Chat types</a></li>
+      <li><a href="#chat-bubble">Message bubble</a></li>
+      <li><a href="#chat-list">Inverted message list</a></li>
+      <li><a href="#chat-composer">Composer (input + send)</a></li>
+      <li><a href="#chat-screen">Full chat screen</a></li>
+
+      <li><a class="group">Stories</a></li>
+      <li><a href="#stories-tile">Story tile (horizontal)</a></li>
+      <li><a href="#stories-viewer">Fullscreen viewer + auto-advance</a></li>
+      <li><a href="#stories-progress">Progress bar segments</a></li>
+
+      <li><a class="group">Forms</a></li>
+      <li><a href="#form-controlled">Controlled input</a></li>
+      <li><a href="#form-validation">Validation pattern</a></li>
+      <li><a href="#form-submit">Submit with disabled state</a></li>
+
+      <li><a class="group">UI primitives</a></li>
+      <li><a href="#pressable">Pressable (debounce)</a></li>
+      <li><a href="#modal">Modal + overlay</a></li>
+      <li><a href="#image">Image with placeholder</a></li>
+      <li><a href="#empty">Empty / loading / error</a></li>
+
+      <li><a class="group">Navigation</a></li>
+      <li><a href="#nav-stack">React Navigation — stack</a></li>
+      <li><a href="#nav-tabs">Tabs</a></li>
+      <li><a href="#nav-params">Typed params</a></li>
+      <li><a href="#nav-deeplink">Deep linking</a></li>
+      <li><a href="#expo-router">Expo Router</a></li>
+
+      <li><a class="group">State</a></li>
+      <li><a href="#state-matrix">When local vs Zustand vs RQ</a></li>
+      <li><a href="#zustand">Zustand store</a></li>
+
+      <li><a class="group">A11y + polish</a></li>
+      <li><a href="#a11y">Accessibility props</a></li>
+      <li><a href="#status-bar">SafeAreaProvider + StatusBar</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">React Native Build Patterns</h1>
+    <div class="doc-sub">Feature-build patterns for chat, stories, forms, navigation. Code-only reference.</div>
+
+    <!-- ============ LAYOUT ============ -->
+    <h2 id="safearea">SafeAreaView</h2>
+    <p class="note">Use <code>react-native-safe-area-context</code> (more reliable than the deprecated core <code>SafeAreaView</code>).</p>
+<pre><code>import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+
+export default function App() {
+  return (
+    &lt;SafeAreaProvider&gt;
+      &lt;SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}&gt;
+        &lt;Screen /&gt;
+      &lt;/SafeAreaView&gt;
+    &lt;/SafeAreaProvider&gt;
+  );
+}</code></pre>
+
+    <h2 id="keyboard">KeyboardAvoidingView</h2>
+    <p class="note">iOS uses <code>padding</code> behavior, Android uses <code>height</code>. Always wrap composer inputs.</p>
+<pre><code>import { KeyboardAvoidingView, Platform } from 'react-native';
+
+&lt;KeyboardAvoidingView
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  style={{ flex: 1 }}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+&gt;
+  {/* list + composer */}
+&lt;/KeyboardAvoidingView&gt;</code></pre>
+
+    <h2 id="flex">Flex layout</h2>
+<pre><code>const styles = StyleSheet.create({
+  container: { flex: 1 },
+  row:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  column:    { flexDirection: 'column', gap: 8 },
+  spaceBetween: { justifyContent: 'space-between' },
+  center:    { justifyContent: 'center', alignItems: 'center' },
+});</code></pre>
+
+    <!-- ============ CHAT ============ -->
+    <h2 id="chat-types">Chat — types</h2>
+<pre><code>type Sender = 'me' | 'them';
+
+type Message = {
+  id: string;
+  text: string;
+  sender: Sender;
+  timestamp: number;
+  status?: 'sending' | 'sent' | 'failed';  <span class="cmt">// for optimistic UI</span>
+};</code></pre>
+
+    <h2 id="chat-bubble">Message bubble (memoized)</h2>
+<pre><code>const MessageBubble = memo(function MessageBubble({ message }: { message: Message }) {
+  const isMine = message.sender === 'me';
+  return (
+    &lt;View style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowThem]}&gt;
+      &lt;View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleThem]}&gt;
+        &lt;Text style={[styles.bubbleText, isMine ? styles.bubbleTextMine : null]}&gt;
+          {message.text}
+        &lt;/Text&gt;
+        {message.status === 'sending' &amp;&amp; &lt;Text style={styles.statusText}&gt;Sending...&lt;/Text&gt;}
+        {message.status === 'failed'  &amp;&amp; &lt;Text style={styles.statusError}&gt;Failed - tap to retry&lt;/Text&gt;}
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+});
+
+const styles = StyleSheet.create({
+  bubbleRow:      { paddingHorizontal: 12, marginVertical: 2 },
+  bubbleRowMine:  { alignItems: 'flex-end' },
+  bubbleRowThem:  { alignItems: 'flex-start' },
+  bubble:         { maxWidth: '78%', padding: 10, borderRadius: 16 },
+  bubbleMine:     { backgroundColor: '#0084ff', borderBottomRightRadius: 4 },
+  bubbleThem:     { backgroundColor: '#e9e9eb', borderBottomLeftRadius: 4 },
+  bubbleText:     { fontSize: 15, color: '#000' },
+  bubbleTextMine: { color: '#fff' },
+  statusText:     { fontSize: 11, color: '#fff8', marginTop: 2 },
+  statusError:    { fontSize: 11, color: '#ff6b6b', marginTop: 2 },
+});</code></pre>
+
+    <h2 id="chat-list">Inverted FlatList for chat</h2>
+    <p class="note"><code>inverted</code> flips the list so newest is at the bottom and the scroll position naturally stays at the latest message. Pass messages in <strong>reverse chronological order</strong>.</p>
+<pre><code>const renderItem = useCallback(
+  ({ item }: ListRenderItemInfo&lt;Message&gt;) =&gt; &lt;MessageBubble message={item} /&gt;,
+  []
+);
+
+const keyExtractor = useCallback((m: Message) =&gt; m.id, []);
+
+<span class="cmt">// messages must be in reverse-chronological order: newest first</span>
+const orderedMessages = useMemo(
+  () =&gt; [...messages].sort((a, b) =&gt; b.timestamp - a.timestamp),
+  [messages]
+);
+
+&lt;FlatList
+  data={orderedMessages}
+  renderItem={renderItem}
+  keyExtractor={keyExtractor}
+  inverted
+  showsVerticalScrollIndicator={false}
+  initialNumToRender={20}
+  windowSize={11}
+/&gt;</code></pre>
+
+    <h2 id="chat-composer">Composer (input + send button)</h2>
+<pre><code>function Composer({ onSend }: { onSend: (text: string) =&gt; void }) {
+  const [draft, setDraft] = useState('');
+  const canSend = draft.trim().length &gt; 0;
+
+  const handleSend = () =&gt; {
+    if (!canSend) return;
+    onSend(draft.trim());
+    setDraft('');
+  };
+
+  return (
+    &lt;View style={styles.composer}&gt;
+      &lt;TextInput
+        value={draft}
+        onChangeText={setDraft}
+        placeholder="Message..."
+        style={styles.input}
+        multiline
+        maxLength={2000}
+        returnKeyType="send"
+        onSubmitEditing={handleSend}
+        blurOnSubmit={false}
+        accessibilityLabel="Message input"
+      /&gt;
+      &lt;Pressable
+        onPress={handleSend}
+        disabled={!canSend}
+        style={[styles.sendButton, !canSend &amp;&amp; styles.sendButtonDisabled]}
+        accessibilityRole="button"
+        accessibilityLabel="Send message"
+      &gt;
+        &lt;Text style={styles.sendButtonText}&gt;Send&lt;/Text&gt;
+      &lt;/Pressable&gt;
+    &lt;/View&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  composer: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    padding: 8, gap: 8, borderTopWidth: 1, borderTopColor: '#eee',
+  },
+  input: {
+    flex: 1, minHeight: 40, maxHeight: 100,
+    borderWidth: 1, borderColor: '#ccc', borderRadius: 18,
+    paddingHorizontal: 14, paddingVertical: 8, fontSize: 15,
+  },
+  sendButton: {
+    backgroundColor: '#0084ff', paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 18,
+  },
+  sendButtonDisabled: { backgroundColor: '#ccc' },
+  sendButtonText: { color: '#fff', fontWeight: '600' },
+});</code></pre>
+
+    <h2 id="chat-screen">Full chat screen (composition)</h2>
+<pre><code>export default function ChatScreen() {
+  const [messages, setMessages] = useState&lt;Message[]&gt;(INITIAL_MESSAGES);
+
+  const onSend = useCallback((text: string) =&gt; {
+    const optimistic: Message = {
+      id: `temp-${Date.now()}`,
+      text,
+      sender: 'me',
+      timestamp: Date.now(),
+      status: 'sending',
+    };
+    setMessages((prev) =&gt; [...prev, optimistic]);
+
+    sendMessage(text)
+      .then(({ id }) =&gt; {
+        setMessages((prev) =&gt;
+          prev.map((m) =&gt; m.id === optimistic.id ? { ...m, id, status: 'sent' } : m)
+        );
+      })
+      .catch(() =&gt; {
+        setMessages((prev) =&gt;
+          prev.map((m) =&gt; m.id === optimistic.id ? { ...m, status: 'failed' } : m)
+        );
+      });
+  }, []);
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }} edges={['top']}&gt;
+      &lt;KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      &gt;
+        &lt;FlatList
+          data={[...messages].reverse()}
+          inverted
+          renderItem={({ item }) =&gt; &lt;MessageBubble message={item} /&gt;}
+          keyExtractor={(m) =&gt; m.id}
+          ListEmptyComponent={&lt;Text style={styles.empty}&gt;No messages yet&lt;/Text&gt;}
+        /&gt;
+        &lt;Composer onSend={onSend} /&gt;
+      &lt;/KeyboardAvoidingView&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}</code></pre>
+
+    <!-- ============ STORIES ============ -->
+    <h2 id="stories-tile">Story tile (horizontal scroll)</h2>
+<pre><code>type Story = {
+  id: string;
+  authorName: string;
+  avatarUri: string;
+  segments: { uri: string; duration: number }[];  <span class="cmt">// each segment shown in sequence</span>
+};
+
+const StoryTile = memo(function StoryTile({ story, onPress }: {
+  story: Story; onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(story.id)} style={styles.tile}&gt;
+      &lt;View style={styles.avatarRing}&gt;
+        &lt;Image source={{ uri: story.avatarUri }} style={styles.avatar} /&gt;
+      &lt;/View&gt;
+      &lt;Text style={styles.tileName} numberOfLines={1}&gt;{story.authorName}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+&lt;FlatList
+  data={stories}
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  renderItem={({ item }) =&gt; &lt;StoryTile story={item} onPress={openStory} /&gt;}
+  keyExtractor={(s) =&gt; s.id}
+  contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
+/&gt;</code></pre>
+
+    <h2 id="stories-viewer">Fullscreen viewer with auto-advance</h2>
+<pre><code>function StoryViewer({ story, onClose }: { story: Story; onClose: () =&gt; void }) {
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const segment = story.segments[segmentIndex];
+
+  useEffect(() =&gt; {
+    if (!segment) { onClose(); return; }
+    const id = setTimeout(() =&gt; setSegmentIndex((i) =&gt; i + 1), segment.duration);
+    return () =&gt; clearTimeout(id);
+  }, [segment, onClose]);
+
+  const goNext = () =&gt; setSegmentIndex((i) =&gt; i + 1);
+  const goPrev = () =&gt; setSegmentIndex((i) =&gt; Math.max(0, i - 1));
+
+  if (!segment) return null;
+
+  return (
+    &lt;Modal visible animationType="fade" onRequestClose={onClose}&gt;
+      &lt;View style={styles.viewerContainer}&gt;
+        &lt;Image source={{ uri: segment.uri }} style={styles.viewerImage} resizeMode="cover" /&gt;
+
+        &lt;ProgressBar segments={story.segments.length} current={segmentIndex} /&gt;
+
+        &lt;Pressable style={styles.tapLeft}  onPress={goPrev} /&gt;
+        &lt;Pressable style={styles.tapRight} onPress={goNext} /&gt;
+
+        &lt;Pressable style={styles.closeBtn} onPress={onClose}&gt;
+          &lt;Text style={styles.closeText}&gt;✕&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      &lt;/View&gt;
+    &lt;/Modal&gt;
+  );
+}</code></pre>
+
+    <h2 id="stories-progress">Progress bar (segmented)</h2>
+<pre><code>function ProgressBar({ segments, current }: { segments: number; current: number }) {
+  return (
+    &lt;View style={styles.progressContainer}&gt;
+      {Array.from({ length: segments }, (_, i) =&gt; (
+        &lt;View key={i} style={styles.progressTrack}&gt;
+          &lt;View
+            style={[
+              styles.progressFill,
+              { width: i &lt; current ? '100%' : i === current ? '50%' : '0%' },
+            ]}
+          /&gt;
+        &lt;/View&gt;
+      ))}
+    &lt;/View&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  progressContainer: {
+    flexDirection: 'row', position: 'absolute', top: 12, left: 12, right: 12, gap: 4,
+  },
+  progressTrack: { flex: 1, height: 3, backgroundColor: '#fff4', borderRadius: 2 },
+  progressFill:  { height: '100%', backgroundColor: '#fff', borderRadius: 2 },
+});</code></pre>
+
+    <!-- ============ FORMS ============ -->
+    <h2 id="form-controlled">Controlled input</h2>
+<pre><code>const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
+
+&lt;TextInput
+  value={email}
+  onChangeText={setEmail}
+  placeholder="Email"
+  keyboardType="email-address"
+  autoCapitalize="none"
+  autoCorrect={false}
+  textContentType="emailAddress"
+/&gt;
+
+&lt;TextInput
+  value={password}
+  onChangeText={setPassword}
+  placeholder="Password"
+  secureTextEntry
+  textContentType="password"
+/&gt;</code></pre>
+
+    <h2 id="form-validation">Validation pattern</h2>
+<pre><code>type FormErrors = Partial&lt;Record&lt;'email' | 'password', string&gt;&gt;;
+
+function validate(values: { email: string; password: string }): FormErrors {
+  const errors: FormErrors = {};
+  if (!values.email.includes('@')) errors.email = 'Invalid email';
+  if (values.password.length &lt; 8)  errors.password = 'Password too short';
+  return errors;
+}
+
+const [touched, setTouched] = useState&lt;Record&lt;string, boolean&gt;&gt;({});
+const errors = validate({ email, password });
+
+&lt;TextInput
+  value={email}
+  onChangeText={setEmail}
+  onBlur={() =&gt; setTouched((t) =&gt; ({ ...t, email: true }))}
+/&gt;
+{touched.email &amp;&amp; errors.email &amp;&amp; &lt;Text style={styles.error}&gt;{errors.email}&lt;/Text&gt;}</code></pre>
+
+    <h2 id="form-submit">Submit with disabled state</h2>
+<pre><code>const hasErrors = Object.keys(errors).length &gt; 0;
+const [isSubmitting, setIsSubmitting] = useState(false);
+
+const onSubmit = async () =&gt; {
+  if (hasErrors) {
+    setTouched({ email: true, password: true });  <span class="cmt">// force-show errors</span>
+    return;
+  }
+  setIsSubmitting(true);
+  try { await login({ email, password }); }
+  catch (e) { Alert.alert('Login failed'); }
+  finally { setIsSubmitting(false); }
+};
+
+&lt;Pressable
+  onPress={onSubmit}
+  disabled={hasErrors || isSubmitting}
+  style={[styles.button, (hasErrors || isSubmitting) &amp;&amp; styles.buttonDisabled]}
+&gt;
+  {isSubmitting
+    ? &lt;ActivityIndicator color="#fff" /&gt;
+    : &lt;Text style={styles.buttonText}&gt;Log in&lt;/Text&gt;}
+&lt;/Pressable&gt;</code></pre>
+
+    <!-- ============ UI PRIMITIVES ============ -->
+    <h2 id="pressable">Pressable with double-tap debounce</h2>
+<pre><code>function useDebouncedPress(handler: () =&gt; void, ms = 500) {
+  const lastTapRef = useRef(0);
+  return useCallback(() =&gt; {
+    const now = Date.now();
+    if (now - lastTapRef.current &lt; ms) return;  <span class="cmt">// ignore rapid double-tap</span>
+    lastTapRef.current = now;
+    handler();
+  }, [handler, ms]);
+}
+
+const onConfirmedPress = useDebouncedPress(onPress, 800);
+&lt;Pressable onPress={onConfirmedPress} /&gt;</code></pre>
+
+    <h2 id="modal">Modal + backdrop</h2>
+<pre><code>&lt;Modal
+  visible={isOpen}
+  transparent
+  animationType="fade"
+  onRequestClose={() =&gt; setOpen(false)}
+&gt;
+  &lt;Pressable style={styles.backdrop} onPress={() =&gt; setOpen(false)}&gt;
+    &lt;Pressable style={styles.modalCard} onPress={() =&gt; { /* swallow tap */ }}&gt;
+      &lt;Text&gt;Modal content&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  &lt;/Pressable&gt;
+&lt;/Modal&gt;
+
+const styles = StyleSheet.create({
+  backdrop:  { flex: 1, backgroundColor: '#0008', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { backgroundColor: '#fff', padding: 20, borderRadius: 12, minWidth: 280 },
+});</code></pre>
+
+    <h2 id="image">Image with placeholder</h2>
+<pre><code>import { Image } from 'expo-image';   <span class="cmt">// preferred over RN core Image</span>
+
+&lt;Image
+  source={{ uri }}
+  placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+  contentFit="cover"
+  transition={200}
+  style={{ width: 80, height: 80, borderRadius: 40 }}
+/&gt;</code></pre>
+
+    <h2 id="empty">Empty / loading / error state</h2>
+<pre><code>if (isLoading) return &lt;ActivityIndicator style={styles.centered} /&gt;;
+if (isError)   return &lt;ErrorState message={error.message} onRetry={refetch} /&gt;;
+if (data.length === 0) return &lt;EmptyState title="Nothing yet" subtitle="Tap + to add" /&gt;;
+
+function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    &lt;View style={styles.emptyContainer}&gt;
+      &lt;Text style={styles.emptyTitle}&gt;{title}&lt;/Text&gt;
+      {subtitle &amp;&amp; &lt;Text style={styles.emptySubtitle}&gt;{subtitle}&lt;/Text&gt;}
+    &lt;/View&gt;
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () =&gt; void }) {
+  return (
+    &lt;View style={styles.emptyContainer}&gt;
+      &lt;Text style={styles.errorTitle}&gt;Something went wrong&lt;/Text&gt;
+      &lt;Text style={styles.emptySubtitle}&gt;{message}&lt;/Text&gt;
+      &lt;Pressable onPress={onRetry} style={styles.retryButton}&gt;
+        &lt;Text style={styles.retryText}&gt;Retry&lt;/Text&gt;
+      &lt;/Pressable&gt;
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+    <!-- ============ NAVIGATION ============ -->
+    <h2 id="nav-stack">React Navigation — Stack</h2>
+<pre><code>import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+type RootStackParamList = {
+  Home: undefined;
+  Detail: { id: string };
+};
+
+const Stack = createNativeStackNavigator&lt;RootStackParamList&gt;();
+
+export default function App() {
+  return (
+    &lt;NavigationContainer&gt;
+      &lt;Stack.Navigator&gt;
+        &lt;Stack.Screen name="Home"   component={HomeScreen}   options={{ title: 'Home' }} /&gt;
+        &lt;Stack.Screen name="Detail" component={DetailScreen} options={{ title: 'Detail' }} /&gt;
+      &lt;/Stack.Navigator&gt;
+    &lt;/NavigationContainer&gt;
+  );
+}</code></pre>
+
+    <h2 id="nav-tabs">Tabs</h2>
+<pre><code>import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+type TabParamList = { Feed: undefined; Search: undefined; Profile: undefined };
+
+const Tab = createBottomTabNavigator&lt;TabParamList&gt;();
+
+&lt;Tab.Navigator screenOptions={{ tabBarActiveTintColor: '#0084ff' }}&gt;
+  &lt;Tab.Screen name="Feed"    component={FeedScreen} /&gt;
+  &lt;Tab.Screen name="Search"  component={SearchScreen} /&gt;
+  &lt;Tab.Screen name="Profile" component={ProfileScreen} /&gt;
+&lt;/Tab.Navigator&gt;</code></pre>
+
+    <h2 id="nav-params">Typed navigation params</h2>
+<pre><code>import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+type Props = NativeStackScreenProps&lt;RootStackParamList, 'Detail'&gt;;
+
+function DetailScreen({ route, navigation }: Props) {
+  const { id } = route.params;                      <span class="cmt">// fully typed</span>
+
+  return (
+    &lt;View&gt;
+      &lt;Text&gt;Detail for {id}&lt;/Text&gt;
+      &lt;Pressable onPress={() =&gt; navigation.goBack()}&gt;&lt;Text&gt;Back&lt;/Text&gt;&lt;/Pressable&gt;
+      &lt;Pressable onPress={() =&gt; navigation.navigate('Home')}&gt;&lt;Text&gt;Home&lt;/Text&gt;&lt;/Pressable&gt;
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// Global augmentation lets useNavigation() / useRoute() infer types</span>
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}</code></pre>
+
+    <h2 id="nav-deeplink">Deep linking</h2>
+<pre><code>const linking = {
+  prefixes: ['tesla://', 'https://app.tesla.com'],
+  config: {
+    screens: {
+      Home: '',
+      Detail: 'vehicle/:id',
+    },
+  },
+};
+
+&lt;NavigationContainer linking={linking}&gt;
+  &lt;Stack.Navigator&gt;...&lt;/Stack.Navigator&gt;
+&lt;/NavigationContainer&gt;</code></pre>
+
+    <h2 id="expo-router">Expo Router (file-based routing)</h2>
+    <p class="note">Expo Router is the file-system-based router for Expo apps. Routes are inferred from file paths under <code>app/</code>.</p>
+<pre><code><span class="cmt">// File structure:
+// app/
+//   _layout.tsx              ← root layout (Stack wrapper)
+//   index.tsx                ← route: /
+//   vehicle/[id].tsx         ← dynamic route: /vehicle/:id
+//   (tabs)/
+//     _layout.tsx            ← tab layout
+//     feed.tsx               ← /feed
+//     profile.tsx            ← /profile</span>
+
+<span class="cmt">// app/_layout.tsx</span>
+import { Stack } from 'expo-router';
+
+export default function RootLayout() {
+  return (
+    &lt;Stack&gt;
+      &lt;Stack.Screen name="index" options={{ title: 'Home' }} /&gt;
+      &lt;Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle' }} /&gt;
+    &lt;/Stack&gt;
+  );
+}
+
+<span class="cmt">// app/vehicle/[id].tsx</span>
+import { useLocalSearchParams, Link } from 'expo-router';
+
+export default function VehicleScreen() {
+  const { id } = useLocalSearchParams&lt;{ id: string }&gt;();
+  return (
+    &lt;View&gt;
+      &lt;Text&gt;Vehicle {id}&lt;/Text&gt;
+      &lt;Link href="/"&gt;Back home&lt;/Link&gt;
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// Programmatic navigation</span>
+import { router } from 'expo-router';
+
+router.push(`/vehicle/${id}`);
+router.back();
+router.replace('/login');</code></pre>
+
+    <!-- ============ STATE ============ -->
+    <h2 id="state-matrix">State decision — local vs Zustand vs React Query</h2>
+    <table>
+      <thead><tr><th>State type</th><th>Where it lives</th></tr></thead>
+      <tbody>
+        <tr><td>Form input, modal open/closed, currently-selected tab</td><td><strong>Local <code>useState</code></strong> — ephemeral, single-component</td></tr>
+        <tr><td>Theme, current user, app-wide preferences, auth state</td><td><strong>Zustand</strong> (or Context) — shared across screens, not server-derived</td></tr>
+        <tr><td>Anything that came from a server: vehicles, messages, telemetry</td><td><strong>React Query</strong> — caching, dedupe, refetch, optimistic all built in</td></tr>
+        <tr><td>Ephemeral animation values (scroll position, gesture progress)</td><td><strong>Reanimated shared values</strong> — runs on UI thread</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Anti-pattern: storing server data in Zustand then manually keeping it in sync with refetches. That's reinventing React Query.</p>
+
+    <h2 id="zustand">Zustand store</h2>
+<pre><code>import { create } from 'zustand';
+
+type AuthStore = {
+  user: User | null;
+  setUser: (user: User | null) =&gt; void;
+  logout: () =&gt; void;
+};
+
+export const useAuthStore = create&lt;AuthStore&gt;((set) =&gt; ({
+  user: null,
+  setUser: (user) =&gt; set({ user }),
+  logout:  () =&gt; set({ user: null }),
+}));
+
+<span class="cmt">// Subscribe to a single slice — re-renders only when that slice changes</span>
+function Header() {
+  const userName = useAuthStore((s) =&gt; s.user?.name);
+  return &lt;Text&gt;Hi {userName ?? 'Guest'}&lt;/Text&gt;;
+}</code></pre>
+
+    <!-- ============ A11Y ============ -->
+    <h2 id="a11y">Accessibility props</h2>
+<pre><code>&lt;Pressable
+  onPress={onSend}
+  accessibilityRole="button"
+  accessibilityLabel="Send message"
+  accessibilityHint="Sends the typed message to the conversation"
+  accessibilityState={{ disabled: !canSend }}
+&gt;
+  &lt;Text&gt;Send&lt;/Text&gt;
+&lt;/Pressable&gt;
+
+&lt;Image
+  source={{ uri: story.avatarUri }}
+  accessibilityLabel={`${story.authorName}'s avatar`}
+/&gt;
+
+&lt;TextInput
+  accessibilityLabel="Email input"
+  accessibilityHint="Enter your email address"
+/&gt;</code></pre>
+
+    <h2 id="status-bar">SafeAreaProvider + StatusBar</h2>
+<pre><code>import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+
+export default function App() {
+  return (
+    &lt;SafeAreaProvider&gt;
+      &lt;StatusBar style="auto" /&gt;
+      &lt;NavigationContainer&gt;
+        {/* ... */}
+      &lt;/NavigationContainer&gt;
+    &lt;/SafeAreaProvider&gt;
+  );
+}</code></pre>
+
+  </main>
+
+</div>
+
+</body>
+</html>
