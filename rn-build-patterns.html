@@ -155,6 +155,7 @@
       <li><a class="group">Native-thread UI</a></li>
       <li><a href="#thread-model">JS thread vs UI thread</a></li>
       <li><a href="#expo-ui">@expo/ui native primitives</a></li>
+      <li><a href="#rn-ease">react-native-ease (OS animations)</a></li>
       <li><a href="#reanimated">Reanimated worklets</a></li>
       <li><a href="#skia">React Native Skia</a></li>
       <li><a href="#fabric">New architecture (Fabric)</a></li>
@@ -933,8 +934,83 @@ function Settings() {
       <li>Older RN versions / non-Expo workflows where the codegen hooks aren't available</li>
     </ul>
 
+    <h2 id="rn-ease">react-native-ease — OS-level animations (zero JS, even off the worklet runtime)</h2>
+    <p class="note"><code>react-native-ease</code> (by App &amp; Flow) hands animations directly to the platform's native animation engine — <strong>Core Animation on iOS, Animator / SpringAnimation on Android</strong>. No JS animation loop, no worklets, no shared values. Just declare target values; the OS interpolates. Fabric-only.</p>
+
+    <h3>Why it matters (vs Reanimated)</h3>
+    <p class="note">Reanimated runs worklets on the UI thread but still in a JS runtime (Hermes worklet runtime). Ease skips even that — animations are objects handed to <code>CAAnimation</code> / <code>ObjectAnimator</code>, which is what the OS itself uses for its own animations. For simple state-change animations (fade, slide, scale, color), it's the cheapest path possible.</p>
+
+    <h3>Basic usage — declarative, CSS-transition style</h3>
+<pre><code>import { EaseView } from 'react-native-ease';
+
+function FadeCard({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  return (
+    &lt;EaseView
+      animate={{ opacity: visible ? 1 : 0 }}
+      transition={{ type: 'timing', duration: 300, easing: 'easeOut' }}
+      style={styles.card}
+    &gt;
+      {children}
+    &lt;/EaseView&gt;
+  );
+}</code></pre>
+    <p class="note">When values in <code>animate</code> change, the view smoothly transitions. <strong>Interruptible:</strong> changing values mid-animation smoothly redirects to the new target — no jumps.</p>
+
+    <h3>Timing transitions</h3>
+<pre><code>&lt;EaseView
+  animate={{ translateX: panelOpen ? 200 : 0 }}
+  transition={{
+    type: 'timing',
+    duration: 300,
+    easing: 'easeInOut',     <span class="cmt">// 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | [x1,y1,x2,y2]</span>
+    delay: 0,
+    loop: undefined,         <span class="cmt">// 'repeat' | 'reverse'</span>
+  }}
+/&gt;
+
+<span class="cmt">// Material Design easing</span>
+transition={{ type: 'timing', duration: 300, easing: [0.4, 0, 0.2, 1] }}
+
+<span class="cmt">// Overshoot (y can exceed 0-1)</span>
+transition={{ type: 'timing', duration: 500, easing: [0.68, -0.55, 0.265, 1.55] }}</code></pre>
+
+    <h3>Spring transitions (physics-based)</h3>
+<pre><code>&lt;EaseView
+  animate={{ scale: pressed ? 0.95 : 1 }}
+  transition={{
+    type: 'spring',
+    damping: 15,     <span class="cmt">// higher = less oscillation</span>
+    stiffness: 120,  <span class="cmt">// higher = snappier</span>
+    mass: 1,         <span class="cmt">// higher = slower, more momentum</span>
+  }}
+/&gt;</code></pre>
+
+    <h3>When to use Ease vs Reanimated</h3>
+    <table>
+      <thead><tr><th>Use case</th><th>Ease</th><th>Reanimated</th></tr></thead>
+      <tbody>
+        <tr><td>Fade / slide / scale on state change</td><td>✅ simpler</td><td>works</td></tr>
+        <tr><td>Enter / exit animations</td><td>✅ simpler</td><td>works</td></tr>
+        <tr><td>Color / opacity transitions on a list item</td><td>✅ simpler</td><td>works</td></tr>
+        <tr><td>Gesture-driven (pan, pinch, swipe-to-dismiss)</td><td>—</td><td>✅ needed</td></tr>
+        <tr><td>Layout animations (width, height, position)</td><td>—</td><td>✅ needed</td></tr>
+        <tr><td>Complex interpolation chaining / shared values across components</td><td>—</td><td>✅ needed</td></tr>
+        <tr><td>Old architecture (pre-Fabric)</td><td>—</td><td>✅ needed</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Interview talking points</h3>
+    <ul>
+      <li><em>"For simple state-change animations I'd reach for <code>react-native-ease</code> first — it hands the animation to Core Animation on iOS or Animator on Android, which is what the OS itself uses. No JS overhead, not even worklet runtime overhead."</em></li>
+      <li><em>"Reanimated is what I'd use when I need gesture-driven interpolation, layout animations, or shared values that cross component boundaries — anywhere the animation has to react to dynamic JS state or gestures continuously."</em></li>
+      <li><em>"Ease is Fabric-only, so it requires the new architecture. For projects on old arch, fall back to Reanimated or Animated with <code>useNativeDriver: true</code> for transforms and opacity."</em></li>
+      <li><em>"Both libraries share the principle: get animations off the JS thread. The difference is how far off — Reanimated to the UI thread's worklet runtime, Ease all the way to the OS's animation engine."</em></li>
+    </ul>
+
+    <p class="note"><strong>Migration note:</strong> AppAndFlow ships an Agent Skill (<code>npx skills add appandflow/react-native-ease</code>) that scans for Reanimated/Animated code and suggests/applies Ease migrations where it's a better fit.</p>
+
     <h2 id="reanimated">Reanimated worklets — animations on the UI thread</h2>
-    <p class="note">The <code>'worklet'</code> directive marks a JS function that compiles to run on the UI thread instead of the JS thread. Animations driven by shared values stay 60fps even if JS is doing heavy work elsewhere.</p>
+    <p class="note">The <code>'worklet'</code> directive marks a JS function that compiles to run on the UI thread instead of the JS thread. Animations driven by shared values stay 60fps even if JS is doing heavy work elsewhere. <strong>For simple state-change animations, see <a href="#rn-ease">react-native-ease</a> above — usually less code, less runtime overhead.</strong> Reach for Reanimated when you need gesture-driven interpolation, layout animations, or shared values across components.</p>
 
     <h3>Core hooks</h3>
 <pre><code>import Animated, {
