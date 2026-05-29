@@ -148,6 +148,17 @@
       <li><a href="#state-matrix">When local vs Zustand vs RQ</a></li>
       <li><a href="#zustand">Zustand store</a></li>
 
+      <li><a class="group">Persistence</a></li>
+      <li><a href="#mmkv">MMKV (sync KV store)</a></li>
+      <li><a href="#storage-matrix">Storage decision matrix</a></li>
+
+      <li><a class="group">Native-thread UI</a></li>
+      <li><a href="#thread-model">JS thread vs UI thread</a></li>
+      <li><a href="#expo-ui">@expo/ui native primitives</a></li>
+      <li><a href="#reanimated">Reanimated worklets</a></li>
+      <li><a href="#skia">React Native Skia</a></li>
+      <li><a href="#fabric">New architecture (Fabric)</a></li>
+
       <li><a class="group">A11y + polish</a></li>
       <li><a href="#a11y">Accessibility props</a></li>
       <li><a href="#status-bar">SafeAreaProvider + StatusBar</a></li>
@@ -746,6 +757,310 @@ function Header() {
   const userName = useAuthStore((s) =&gt; s.user?.name);
   return &lt;Text&gt;Hi {userName ?? 'Guest'}&lt;/Text&gt;;
 }</code></pre>
+
+    <!-- ============ PERSISTENCE ============ -->
+    <h2 id="mmkv">MMKV (synchronous key-value store)</h2>
+    <p class="note"><code>react-native-mmkv</code> — a fast, synchronous, encrypted-optional key-value store built on Tencent's MMKV (C++ library backed by <code>mmap</code>). The reflexive replacement for <code>AsyncStorage</code> whenever you can afford to install a native module.</p>
+
+    <h3>When to use it</h3>
+    <ul>
+      <li><strong>Auth tokens</strong> — synchronous reads mean no <code>useEffect</code> dance to load on app start. Pair with the <code>encryptionKey</code> option (use a key from Keychain/Keystore).</li>
+      <li><strong>App preferences / settings</strong> — theme, language, feature flags, last-viewed screen.</li>
+      <li><strong>Small caches</strong> — last-fetched user profile, recently-viewed items, draft form values.</li>
+      <li><strong>Hydration of Zustand or other stores on startup</strong> — synchronous reads mean the store is populated before the first render.</li>
+    </ul>
+
+    <h3>When NOT to use it</h3>
+    <ul>
+      <li>Large blobs (images, video, multi-MB JSON) — use the filesystem (<code>expo-file-system</code>) instead. MMKV reads the whole value into memory.</li>
+      <li>Relational data with queries — use SQLite (<code>expo-sqlite</code>, <code>op-sqlite</code>) or a real DB.</li>
+      <li>Anything cross-process (widgets, share extensions) — needs a more elaborate IPC setup.</li>
+    </ul>
+
+    <h3>Basic API</h3>
+<pre><code>import { MMKV } from 'react-native-mmkv';
+
+export const storage = new MMKV({
+  id: 'app-default',                              <span class="cmt">// instance namespace</span>
+  encryptionKey: 'derived-from-keychain-or-keystore',  <span class="cmt">// optional</span>
+});
+
+<span class="cmt">// Synchronous reads/writes — no await</span>
+storage.set('user.id', '12345');
+const userId = storage.getString('user.id');     <span class="cmt">// '12345'</span>
+
+storage.set('darkMode', true);
+const dark = storage.getBoolean('darkMode');     <span class="cmt">// true</span>
+
+storage.set('count', 42);
+const count = storage.getNumber('count');        <span class="cmt">// 42</span>
+
+storage.delete('user.id');
+storage.clearAll();
+
+<span class="cmt">// Object/array — JSON encode yourself</span>
+storage.set('user', JSON.stringify({ id: '12345', name: 'Jeev' }));
+const user = JSON.parse(storage.getString('user') ?? 'null');</code></pre>
+
+    <h3>useMMKV hook (reactive)</h3>
+<pre><code>import { useMMKVString, useMMKVBoolean } from 'react-native-mmkv';
+
+function Settings() {
+  const [theme, setTheme]   = useMMKVString('theme');
+  const [reduced, setReduced] = useMMKVBoolean('reducedMotion');
+
+  return (
+    &lt;View&gt;
+      &lt;Pressable onPress={() =&gt; setTheme(theme === 'dark' ? 'light' : 'dark')}&gt;
+        &lt;Text&gt;Theme: {theme ?? 'system'}&lt;/Text&gt;
+      &lt;/Pressable&gt;
+      &lt;Switch value={reduced ?? false} onValueChange={setReduced} /&gt;
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+    <h3>Zustand hydration via MMKV</h3>
+<pre><code>import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { MMKV } from 'react-native-mmkv';
+
+const storage = new MMKV();
+
+const mmkvStorage = {
+  setItem:    (k: string, v: string) =&gt; { storage.set(k, v); },
+  getItem:    (k: string) =&gt; storage.getString(k) ?? null,
+  removeItem: (k: string) =&gt; storage.delete(k),
+};
+
+export const useSettings = create&lt;SettingsStore&gt;()(
+  persist(
+    (set) =&gt; ({
+      theme: 'system',
+      setTheme: (theme) =&gt; set({ theme }),
+    }),
+    {
+      name: 'settings',
+      storage: createJSONStorage(() =&gt; mmkvStorage),
+    }
+  )
+);</code></pre>
+
+    <h3>Why interviewers ask about it</h3>
+    <p class="note">If you say "AsyncStorage" in a Staff round, expect: <em>"Why not MMKV?"</em> The answer they want: <strong>"Synchronous, mmap-backed, ~30× faster than AsyncStorage's SQLite. For auth tokens and preferences I'd default to MMKV unless we needed cross-process access or large blobs."</strong></p>
+
+    <h2 id="storage-matrix">Storage decision matrix</h2>
+    <table>
+      <thead><tr><th>Data shape</th><th>Tool</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Small key-value (tokens, prefs, flags)</td><td><strong>MMKV</strong></td><td>Synchronous, fast, optional encryption</td></tr>
+        <tr><td>Server-derived data with caching</td><td><strong>React Query</strong></td><td>Built-in dedupe, stale-time, mutations — don't reinvent</td></tr>
+        <tr><td>Sensitive secrets (refresh tokens, biometric keys)</td><td><strong>expo-secure-store / Keychain / Keystore</strong></td><td>Hardware-backed encryption, OS-level access control</td></tr>
+        <tr><td>Large blobs (images, video, files)</td><td><strong>expo-file-system</strong></td><td>MMKV reads whole value into memory; filesystem streams</td></tr>
+        <tr><td>Relational data with queries</td><td><strong>expo-sqlite / op-sqlite / WatermelonDB</strong></td><td>SQL + indexes; reactive variants for live queries</td></tr>
+        <tr><td>Cross-process (widgets, share extension)</td><td><strong>App Groups + UserDefaults / SharedPreferences</strong></td><td>MMKV is single-process</td></tr>
+        <tr><td>Offline mutation queue</td><td><strong>MMKV (queue) + RQ persister</strong></td><td>MMKV holds the queue; RQ's offline-first patterns drain it</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ============ NATIVE THREAD ============ -->
+    <h2 id="thread-model">JS thread vs UI thread — what runs where</h2>
+    <p class="note">Most "ground-breaking" RN libraries since 2024 share one ambition: move work off the JS thread onto the UI thread so animations and gestures stay 60fps even when JS is busy.</p>
+    <table>
+      <thead><tr><th>Work</th><th>Thread</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Your component renders (<code>React.render</code>, hooks, JSX)</td><td>JS thread</td><td>Blocking JS = no new renders. Profile with React DevTools.</td></tr>
+        <tr><td>Animated API with <code>useNativeDriver: true</code></td><td>UI thread</td><td>Only works for <code>transform</code> + <code>opacity</code></td></tr>
+        <tr><td>Reanimated worklets (<code>'worklet'</code> directive)</td><td>UI thread</td><td>JS compiled to run synchronously on UI thread — full expressiveness</td></tr>
+        <tr><td>Gesture Handler events</td><td>UI thread</td><td>Native gesture recognizers; pair with Reanimated worklets</td></tr>
+        <tr><td>Skia <code>useDerivedValue</code> renders</td><td>UI thread</td><td>Canvas redraws on UI thread, decoupled from React render</td></tr>
+        <tr><td><code>@expo/ui</code> components</td><td>Native (SwiftUI / Compose)</td><td>Truly native rendering — no Yoga, no JSX bridge per frame</td></tr>
+        <tr><td>FlatList scroll (without virtualization tuning)</td><td>JS + UI mixed</td><td>Scroll is native; cell rendering is JS — see FlatList perf props</td></tr>
+        <tr><td>Network / JSON.parse</td><td>JS thread</td><td>Large parses can drop frames; offload to <code>InteractionManager</code> if needed</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><strong>The Staff-level framing:</strong> "If it animates at 60fps or responds to a gesture, put it on the UI thread. If it computes business logic or talks to the network, JS thread. Bridge crossings are the cost."</p>
+
+    <h2 id="expo-ui">@expo/ui — native SwiftUI / Jetpack Compose primitives</h2>
+    <p class="note"><code>@expo/ui</code> wraps platform-native primitives (SwiftUI on iOS, Jetpack Compose on Android) so they render on the platform's native UI pipeline — not through Yoga + React Native's view hierarchy. Released by Expo in 2025 as part of their "native everywhere" push.</p>
+
+    <h3>What's in the box</h3>
+    <ul>
+      <li><code>&lt;Button&gt;</code>, <code>&lt;Switch&gt;</code>, <code>&lt;Picker&gt;</code>, <code>&lt;Slider&gt;</code>, <code>&lt;DateTimePicker&gt;</code>, <code>&lt;ColorPicker&gt;</code>, <code>&lt;Section&gt;</code>, <code>&lt;List&gt;</code></li>
+      <li>Components match platform conventions automatically (iOS rounded segmented controls, Android Material 3 chips, etc.)</li>
+      <li>Smaller bundle impact than equivalent RN components — no JS implementation, just declarative bridges</li>
+    </ul>
+
+    <h3>Why use it</h3>
+    <ul>
+      <li><strong>Platform consistency without writing two implementations</strong> — the picker LOOKS like a picker on each platform</li>
+      <li><strong>Animations / interactions handled by the OS</strong> — no JS thread involvement for the standard interactions</li>
+      <li><strong>Accessibility free</strong> — system controls inherit OS-level a11y for free</li>
+    </ul>
+
+    <h3>Basic usage</h3>
+<pre><code>import { Button, Switch, Picker, Section } from '@expo/ui';
+
+function Settings() {
+  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState('en');
+
+  return (
+    &lt;Section title="Preferences"&gt;
+      &lt;Switch
+        label="Dark mode"
+        value={darkMode}
+        onValueChange={setDarkMode}
+      /&gt;
+      &lt;Picker
+        label="Language"
+        options={[{ label: 'English', value: 'en' }, { label: 'Español', value: 'es' }]}
+        selected={language}
+        onChange={setLanguage}
+      /&gt;
+      &lt;Button
+        title="Save"
+        variant="filled"
+        onPress={save}
+      /&gt;
+    &lt;/Section&gt;
+  );
+}</code></pre>
+
+    <h3>When NOT to use it</h3>
+    <ul>
+      <li>Heavily branded UIs where the system look conflicts with your design system — stick with custom RN components</li>
+      <li>If you need consistent pixel-perfect behavior across both platforms (it's intentionally NOT pixel-identical)</li>
+      <li>Older RN versions / non-Expo workflows where the codegen hooks aren't available</li>
+    </ul>
+
+    <h2 id="reanimated">Reanimated worklets — animations on the UI thread</h2>
+    <p class="note">The <code>'worklet'</code> directive marks a JS function that compiles to run on the UI thread instead of the JS thread. Animations driven by shared values stay 60fps even if JS is doing heavy work elsewhere.</p>
+
+    <h3>Core hooks</h3>
+<pre><code>import Animated, {
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, Easing,
+  useDerivedValue, runOnJS,
+} from 'react-native-reanimated';
+
+function FadeIn({ children }: { children: React.ReactNode }) {
+  const opacity = useSharedValue(0);
+
+  useEffect(() =&gt; {
+    opacity.value = withTiming(1, {
+      duration: 400,
+      easing: Easing.inOut(Easing.cubic),
+    });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() =&gt; ({
+    opacity: opacity.value,
+    transform: [{ translateY: (1 - opacity.value) * 20 }],
+  }));
+
+  return &lt;Animated.View style={animatedStyle}&gt;{children}&lt;/Animated.View&gt;;
+}</code></pre>
+
+    <h3>Gesture-driven worklet (drag)</h3>
+<pre><code>import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+
+function DraggableCard() {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) =&gt; {
+      'worklet';                       <span class="cmt">// runs on UI thread synchronously</span>
+      translateX.value = e.translationX;
+      translateY.value = e.translationY;
+    })
+    .onEnd(() =&gt; {
+      'worklet';
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    });
+
+  const style = useAnimatedStyle(() =&gt; ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+  }));
+
+  return (
+    &lt;GestureDetector gesture={pan}&gt;
+      &lt;Animated.View style={[styles.card, style]} /&gt;
+    &lt;/GestureDetector&gt;
+  );
+}</code></pre>
+
+    <h3>Calling back to JS thread when needed</h3>
+<pre><code>const handleComplete = () =&gt; {
+  Alert.alert('Done');                 <span class="cmt">// JS thread API — needs runOnJS</span>
+};
+
+const tap = Gesture.Tap().onEnd(() =&gt; {
+  'worklet';
+  opacity.value = withTiming(0, { duration: 200 }, (finished) =&gt; {
+    'worklet';
+    if (finished) runOnJS(handleComplete)();   <span class="cmt">// bridge back to JS</span>
+  });
+});</code></pre>
+
+    <h3>Common pitfalls</h3>
+    <ul>
+      <li><strong>Forgetting <code>'worklet'</code></strong> in a callback passed to a gesture handler → silently runs on JS thread → janky gesture</li>
+      <li><strong>Closing over non-shared values</strong> inside a worklet → "value is undefined on UI thread" — only shared values (<code>useSharedValue</code>) are visible</li>
+      <li><strong>Calling React state setters directly</strong> from a worklet → must go through <code>runOnJS(setState)(value)</code></li>
+      <li><strong>Animating <code>width</code> / <code>height</code> / <code>top</code> / <code>left</code></strong> instead of <code>transform</code> — triggers Yoga layout on each frame; expensive even on UI thread</li>
+    </ul>
+
+    <h2 id="skia">React Native Skia — UI-thread canvas</h2>
+    <p class="note"><code>@shopify/react-native-skia</code> binds React Native to Skia (Google's 2D graphics engine — powers Chrome and Flutter). Draws on a canvas on the UI thread; renders are independent of React's render cycle when paired with <code>useDerivedValue</code>.</p>
+
+    <h3>When to reach for it</h3>
+    <ul>
+      <li><strong>Custom charts</strong> (line graphs, gauges, radial visualizations) — performant at thousands of points</li>
+      <li><strong>Complex animations</strong> with multiple synchronized elements (e.g., a battery-charge gauge with a sweeping needle + glow + particles)</li>
+      <li><strong>Image filters and effects</strong> — blur, gradients, masks, blend modes</li>
+      <li><strong>Visualizations that update at telemetry rate</strong> — pair with Reanimated shared values for 60fps updates without re-renders</li>
+    </ul>
+
+    <h3>Minimal example — animated circle</h3>
+<pre><code>import { Canvas, Circle, Group } from '@shopify/react-native-skia';
+import { useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+
+function Pulse() {
+  const r = useSharedValue(20);
+
+  useEffect(() =&gt; {
+    r.value = withRepeat(withTiming(60, { duration: 800 }), -1, true);
+  }, []);
+
+  return (
+    &lt;Canvas style={{ width: 200, height: 200 }}&gt;
+      &lt;Group&gt;
+        &lt;Circle cx={100} cy={100} r={r} color="rgba(0, 132, 255, 0.6)" /&gt;
+      &lt;/Group&gt;
+    &lt;/Canvas&gt;
+  );
+}</code></pre>
+
+    <p class="note">Use cases for Tesla Energy: live solar-production gauge, Megapack site status overlay, battery-charge radial, telemetry sparkline that updates 5Hz without re-rendering React.</p>
+
+    <h2 id="fabric">The new architecture (Fabric + TurboModules)</h2>
+    <p class="note">The 2024-2025 rewrite of RN's internals. Default on for new RN apps in 2025+. Old: JS↔native talked through an async serialized bridge. New: JS Interface (JSI) lets JS call native (and vice versa) directly via shared memory — no serialization, no async.</p>
+
+    <h3>What changes</h3>
+    <ul>
+      <li><strong>Fabric (renderer):</strong> synchronous, multi-threaded. Layout can happen on the UI thread; React commits are dispatched without queuing across the bridge.</li>
+      <li><strong>TurboModules:</strong> lazy-loaded native modules. Methods are typed (via codegen from TS interfaces). Most native calls become synchronous and zero-copy.</li>
+      <li><strong>JSI (JavaScript Interface):</strong> the substrate everything sits on. JS objects can hold direct references to C++ HostObjects.</li>
+      <li><strong>Codegen:</strong> Generate native interface code from TypeScript spec files (<code>NativeSomething.ts</code>) — fewer hand-written bridges.</li>
+    </ul>
+
+    <h3>Interview talking points</h3>
+    <ul>
+      <li><em>"In the new architecture, calling a native module is a synchronous JSI call, not a posted message across the bridge. That's why MMKV is synchronous out of the box — there's no async serialization layer to await."</em></li>
+      <li><em>"Fabric lets the renderer commit React updates without round-tripping through a queue. Animations and layout can stay synchronized with native, which is why Reanimated v3 can do interpolation on the UI thread without state divergence."</em></li>
+      <li><em>"Old arch is in maintenance — Meta's recommendation is opt into the new architecture for any new project. If we're on RN 0.76+, it's default."</em></li>
+    </ul>
 
     <!-- ============ A11Y ============ -->
     <h2 id="a11y">Accessibility props</h2>
