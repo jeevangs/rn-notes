@@ -147,7 +147,10 @@
 
       <li><a class="group">Validation &amp; Offline</a></li>
       <li><a href="#zod-boundary">Boundary validation (Zod)</a></li>
-      <li><a href="#offline-outbox">Offline outbox queue</a></li>
+      <li><a href="#offline-outbox">Offline outbox — basic</a></li>
+      <li><a href="#outbox-zustand">Offline outbox — persisted</a></li>
+      <li><a href="#outbox-events">Outbox success hook</a></li>
+      <li><a href="#persist-cache">Persist the query cache</a></li>
 
       <li><a class="group">BFF / SDUI</a></li>
       <li><a href="#why-bff">Why a BFF</a></li>
@@ -818,7 +821,7 @@ return parsed.data;</code></pre>
     <p class="note">A schema mismatch becomes a normal query/mutation error, so the existing error UI handles it — no separate code path.</p>
 
     <!-- ============ OFFLINE OUTBOX ============ -->
-    <h2 id="offline-outbox">Offline outbox queue</h2>
+    <h2 id="offline-outbox">Offline outbox queue — basic</h2>
     <p class="note">Queue writes while offline, persist them, drain in order when connectivity returns. Each job carries a stable idempotency key generated once at enqueue, so a retry after a flaky connection can't double-apply.</p>
 <pre><code>import NetInfo from '@react-native-community/netinfo';
 import { MMKV } from 'react-native-mmkv';
@@ -888,6 +891,177 @@ NetInfo.addEventListener((state) =&gt; {
   if (state.isConnected) void drain();
 });</code></pre>
     <p class="note">Pair with an optimistic cache write so the UI updates immediately; the server reconciles when the job drains. Same idempotency key on replay means a double-send is deduped server-side.</p>
+
+    <!-- ============ OUTBOX ZUSTAND ============ -->
+    <h2 id="outbox-zustand">Offline outbox — persisted &amp; reactive (Zustand)</h2>
+    <p class="note">Reactive, restart-surviving variant of the basic outbox above. As a Zustand store with <code>persist</code>, the UI subscribes and re-renders as jobs drain — pending rows show live and survive a force-quit.</p>
+<pre><code>import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { MMKV } from 'react-native-mmkv';
+import NetInfo from '@react-native-community/netinfo';
+import { outboxEvents } from './outbox-events';
+
+const mmkv = new MMKV();
+const mmkvStorage = {
+  getItem:    (k: string) =&gt; mmkv.getString(k) ?? null,
+  setItem:    (k: string, v: string) =&gt; mmkv.set(k, v),
+  removeItem: (k: string) =&gt; mmkv.delete(k),
+};
+
+export type Job = {
+  idempotencyKey: string;
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body: unknown;
+  attempts: number;
+  status: 'pending' | 'syncing' | 'failed';
+};
+
+type OutboxState = {
+  jobs: Job[];
+  enqueue: (job: Omit&lt;Job, 'attempts' | 'status'&gt;) =&gt; void;
+  drain: () =&gt; Promise&lt;void&gt;;
+};
+
+let draining = false;
+
+export const useOutbox = create&lt;OutboxState&gt;()(
+  persist(
+    (set, get) =&gt; ({
+      jobs: [],
+
+      enqueue: (job) =&gt; {
+        set((s) =&gt; ({ jobs: [...s.jobs, { ...job, attempts: 0, status: 'pending' }] }));
+        void get().drain();
+      },
+
+      drain: async () =&gt; {
+        if (draining) return;
+        const net = await NetInfo.fetch();
+        if (!net.isConnected) return;
+        draining = true;
+        try {
+          while (get().jobs.length) {
+            const job = get().jobs[0];
+            set((s) =&gt; ({ jobs: mark(s.jobs, 0, { status: 'syncing' }) }));
+            try {
+              const r = await fetch(job.url, {
+                method: job.method,
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': job.idempotencyKey },
+                body: JSON.stringify(job.body),
+              });
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              const response = await r.json();
+              set((s) =&gt; ({ jobs: s.jobs.slice(1) }));       <span class="cmt">// success -&gt; drop head</span>
+              outboxEvents.emit(job, response);              <span class="cmt">// notify app (see success hook)</span>
+            } catch {
+              set((s) =&gt; ({ jobs: mark(s.jobs, 0, { status: 'failed', attempts: job.attempts + 1 }) }));
+              break;                                         <span class="cmt">// stop; retry on next reconnect</span>
+            }
+          }
+        } finally {
+          draining = false;
+        }
+      },
+    }),
+    {
+      name: 'outbox',
+      storage: createJSONStorage(() =&gt; mmkvStorage),
+      partialize: (s) =&gt; ({ jobs: s.jobs }),     <span class="cmt">// persist data, not the action fns</span>
+    }
+  )
+);
+
+const mark = (jobs: Job[], i: number, patch: Partial&lt;Job&gt;) =&gt;
+  jobs.map((j, idx) =&gt; (idx === i ? { ...j, ...patch } : j));
+
+NetInfo.addEventListener((s) =&gt; { if (s.isConnected) void useOutbox.getState().drain(); });</code></pre>
+    <p class="note">UI reads it reactively — pending rows merge above the server list, and a selector keeps re-renders cheap:</p>
+<pre><code>function useAssessmentList() {
+  const { data: server = [] } = useQuery({ queryKey: ['assessments'], queryFn: getAssessments });
+  const queued = useOutbox((s) =&gt; s.jobs.map(jobToRow));   <span class="cmt">// unsent rows from the queue</span>
+  return [...queued, ...server];                           <span class="cmt">// unsent on top</span>
+}
+
+function PendingBadge() {
+  const n = useOutbox((s) =&gt; s.jobs.length);               <span class="cmt">// selector -&gt; re-render only on change</span>
+  return n ? &lt;Text&gt;{n} pending sync…&lt;/Text&gt; : null;
+}</code></pre>
+
+    <!-- ============ OUTBOX EVENTS ============ -->
+    <h2 id="outbox-events">Outbox success hook (decoupled reconcile)</h2>
+    <p class="note">Keep the outbox free of React Query. A tiny emitter + a hook lets the app react to a successful send and reconcile its own cache. Same stable-ref shape as the WebSocket hook — the ref holds the latest handler so the subscription never churns.</p>
+<pre><code><span class="cmt">// outbox-events.ts</span>
+import type { Job } from './outbox';
+type SuccessListener = (job: Job, response: unknown) =&gt; void;
+const listeners = new Set&lt;SuccessListener&gt;();
+
+export const outboxEvents = {
+  emit: (job: Job, response: unknown) =&gt; listeners.forEach((l) =&gt; l(job, response)),
+  subscribe: (l: SuccessListener) =&gt; { listeners.add(l); return () =&gt; { listeners.delete(l); }; },
+};</code></pre>
+<pre><code><span class="cmt">// useOutboxSuccess.ts</span>
+import { useEffect, useRef } from 'react';
+import { outboxEvents } from './outbox-events';
+import type { Job } from './outbox';
+
+export function useOutboxSuccess(handler: (job: Job, response: unknown) =&gt; void) {
+  const ref = useRef(handler);
+  ref.current = handler;                       <span class="cmt">// latest handler each render — cheap</span>
+
+  useEffect(
+    () =&gt; outboxEvents.subscribe((job, res) =&gt; ref.current(job, res)),
+    []                                         <span class="cmt">// subscribe ONCE — not [handler]</span>
+  );
+}</code></pre>
+<pre><code><span class="cmt">// Mount once near the root — the ONLY place that touches React Query</span>
+function OutboxReconciler() {
+  const qc = useQueryClient();
+  useOutboxSuccess(() =&gt; {
+    qc.invalidateQueries({ queryKey: ['assessments'] });   <span class="cmt">// item left the queue; refresh server list</span>
+  });
+  return null;
+}</code></pre>
+
+    <!-- ============ PERSIST CACHE ============ -->
+    <h2 id="persist-cache">Persist the query cache (persistQueryClient)</h2>
+    <p class="note">The other route: persist the React Query cache itself so cached + optimistic data survive restart. MMKV is synchronous, so use the <em>sync</em> persister.</p>
+<pre><code>import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { MMKV } from 'react-native-mmkv';
+
+const mmkv = new MMKV();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 1000 * 60 * 60 * 24,   <span class="cmt">// 24h — MUST be &gt;= maxAge or the cache is GC'd before restore</span>
+    },
+  },
+});
+
+const persister = createSyncStoragePersister({
+  storage: {
+    getItem:    (k) =&gt; mmkv.getString(k) ?? null,
+    setItem:    (k, v) =&gt; mmkv.set(k, v),
+    removeItem: (k) =&gt; mmkv.delete(k),
+  },
+});
+
+export default function App() {
+  return (
+    &lt;PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 }}
+    &gt;
+      &lt;RootNavigator /&gt;
+    &lt;/PersistQueryClientProvider&gt;
+  );
+}</code></pre>
+    <p class="note"><strong>Gotcha:</strong> <code>gcTime</code> must be &gt;= <code>maxAge</code>, or React Query garbage-collects the query before it can be restored and persistence silently does nothing. On launch the cache rehydrates synchronously, so screens paint persisted data immediately, then refetch in the background if stale.</p>
+    <p class="note"><strong>Pick one source of truth for "unsent."</strong> Persist the <em>queue</em> (Zustand store) when the unsent list is the truth; persist the <em>cache</em> (persistQueryClient) when an optimistic row is the truth. Doing both and merging renders the same item twice. The success hook is the neutral glue either way.</p>
 
     <!-- ============ WHY BFF ============ -->
     <h2 id="why-bff">Why a BFF (backend-for-frontend)</h2>
