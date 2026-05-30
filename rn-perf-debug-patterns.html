@@ -158,6 +158,7 @@
       <li><a href="#thread-isolation">JS vs UI thread</a></li>
       <li><a href="#android-only">Janky only on Android</a></li>
       <li><a href="#selector-fanout">Render fan-out (selectors)</a></li>
+      <li><a href="#diagnose-flow">Diagnosing jank — the flow</a></li>
     </ul>
   </aside>
 
@@ -568,6 +569,23 @@ return ids.map((id) =&gt; &lt;Tile key={id} value={all[id]} /&gt;);</code></pre>
 <span class="cmt">// parent passes only ids; each tile subscribes itself</span>
 return ids.map((id) =&gt; &lt;Tile key={id} id={id} /&gt;);</code></pre>
     <p class="note">For object/array slices, add a shallow comparator (<code>useStore(sel, shallow)</code>) so a new wrapper ref with equal contents doesn't re-render. Pair with a non-reactive buffer that coalesces high-frequency (e.g. 5Hz) updates before they hit the store.</p>
+
+    <!-- ============ DIAGNOSE FLOW ============ -->
+    <h2 id="diagnose-flow">Diagnosing jank — the flow</h2>
+    <p class="note">A repeatable order for finding a frame-drop cause instead of guessing.</p>
+    <ol>
+      <li><strong>Read the dual FPS</strong> (Perf Monitor). JS low + UI fine → JS-thread work (logic / re-renders). UI low too → native / layout (long lists, overdraw, large images). See <a href="#thread-isolation">JS vs UI thread</a>.</li>
+      <li><strong>If JS-bound, capture a Hermes sampling profile</strong> and read the flame — the widest frame is the hot path. See <a href="#flamegraph">reading a flamegraph</a>.</li>
+      <li><strong>Match the hot path to a cause:</strong>
+        <ul>
+          <li>An effect / subscription re-running every render → <a href="#stale-closure">stale closure</a> / missing <a href="#stable-ref">stable ref</a>.</li>
+          <li>One update re-rendering a whole list → <a href="#selector-fanout">render fan-out</a>.</li>
+          <li>Heavy synchronous work (large <code>JSON.parse</code>, unmemoized derivation) blocking the JS thread.</li>
+        </ul>
+      </li>
+      <li><strong>Apply the fix:</strong> stable ref or functional <code>setState</code> for stale closures · per-id selectors for fan-out · <code>useMemo</code> or <code>InteractionManager</code> to defer heavy work · move animations to the UI thread (Reanimated / native driver).</li>
+    </ol>
+    <p class="note">If JS looks idle but frames still drop, the cost is on the UI / native side — profile with Xcode Instruments (Time Profiler) or Perfetto instead of the Hermes profiler.</p>
 
   </main>
 
