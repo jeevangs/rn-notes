@@ -125,6 +125,7 @@
       <li><a class="group">Mutations</a></li>
       <li><a href="#mutation-basic">useMutation — basic</a></li>
       <li><a href="#mutation-optimistic">Optimistic update</a></li>
+      <li><a href="#mutation-update">Optimistic update (edit)</a></li>
 
       <li><a class="group">Patterns</a></li>
       <li><a href="#debounce">Debounce hook</a></li>
@@ -324,6 +325,43 @@ const mutation = useMutation({
     qc.invalidateQueries({ queryKey: ['items'] });
   },
 });</code></pre>
+
+    <!-- ============ MUTATION UPDATE ============ -->
+    <h2 id="mutation-update">Optimistic update — edit an existing item</h2>
+    <p class="note">Same skeleton as create, but the cache write <strong>maps</strong> over the list and replaces the edited row instead of prepending. The <code>mutationFn</code> is a generic PUT/PATCH by id.</p>
+<pre><code>async function updateItem(input: { id: string; patch: Partial&lt;Item&gt; }): Promise&lt;Item&gt; {
+  const r = await fetch(`${API_URL}/items/${input.id}`, {
+    method: 'PATCH',                          <span class="cmt">// PUT to replace, PATCH to merge fields</span>
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input.patch),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+const mutation = useMutation({
+  mutationFn: updateItem,
+
+  onMutate: async ({ id, patch }) =&gt; {
+    await qc.cancelQueries({ queryKey: ['items'] });
+    const previous = qc.getQueryData&lt;Item[]&gt;(['items']);
+
+    qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt;
+      old.map((i) =&gt; (i.id === id ? { ...i, ...patch } : i))   <span class="cmt">// replace just the edited row</span>
+    );
+
+    return { previous };
+  },
+
+  onError: (_err, _vars, ctx) =&gt; {
+    if (ctx?.previous) qc.setQueryData(['items'], ctx.previous);
+  },
+
+  onSettled: () =&gt; {
+    qc.invalidateQueries({ queryKey: ['items'] });
+  },
+});</code></pre>
+    <p class="note">All three CRUD writes share one skeleton — only the cache update differs: <strong>create</strong> prepends <code>[optimistic, ...old]</code> · <strong>update</strong> maps-and-replaces <code>old.map(...)</code> · <strong>delete</strong> filters <code>old.filter((i) =&gt; i.id !== id)</code>.</p>
 
     <!-- ============ DEBOUNCE ============ -->
     <h2 id="debounce">Debounce hook</h2>
