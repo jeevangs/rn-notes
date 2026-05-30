@@ -890,7 +890,34 @@ export async function drain(): Promise&lt;void&gt; {
 NetInfo.addEventListener((state) =&gt; {
   if (state.isConnected) void drain();
 });</code></pre>
-    <p class="note">Pair with an optimistic cache write so the UI updates immediately; the server reconciles when the job drains. Same idempotency key on replay means a double-send is deduped server-side.</p>
+    <p class="note">The caller — a feature/handler — owns the request and mints the idempotency key once; the queue just delivers it:</p>
+<pre><code><span class="cmt">// Caller: enqueue a write, and (optionally) update the cache optimistically.</span>
+function useAddItem() {
+  const qc = useQueryClient();
+
+  return (input: { title: string }) =&gt; {
+    const tempId = `temp-${Date.now()}`;
+
+    <span class="cmt">// optimistic cache write — UI updates immediately (same shape as the optimistic section)</span>
+    qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt; [
+      { id: tempId, title: input.title, createdAt: Date.now() },
+      ...old,
+    ]);
+
+    <span class="cmt">// durable enqueue — survives offline + restart; tempId doubles as the idempotency key</span>
+    enqueue({
+      idempotencyKey: tempId,        <span class="cmt">// minted ONCE here; drain reuses it on every retry</span>
+      url: `${API_URL}/items`,
+      method: 'POST',
+      body: input,
+    });
+  };
+}
+
+<span class="cmt">// in a component</span>
+const addItem = useAddItem();
+&lt;Pressable onPress={() =&gt; addItem({ title: 'New' })}&gt;&lt;Text&gt;Add&lt;/Text&gt;&lt;/Pressable&gt;</code></pre>
+    <p class="note">Pair with an optimistic cache write so the UI updates immediately; the server reconciles when the job drains. Same idempotency key on replay means a double-send is deduped server-side. With the Zustand version below, the call is identical — just <code>useOutbox.getState().enqueue(...)</code> (or <code>const enqueue = useOutbox((s) =&gt; s.enqueue)</code> inside a component).</p>
 
     <!-- ============ OUTBOX ZUSTAND ============ -->
     <h2 id="outbox-zustand">Offline outbox — persisted &amp; reactive (Zustand)</h2>
