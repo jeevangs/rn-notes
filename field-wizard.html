@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-step Form Wizard — Composite Build</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Wizard Composite</h1>
+    <ul>
+      <li><a class="group">Overview</a></li>
+      <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#plan">60-min build — core vs stub</a></li>
+      <li><a href="#seams">Given helpers</a></li>
+
+      <li><a class="group">Foundation</a></li>
+      <li><a href="#types">A · Types</a></li>
+      <li><a href="#skeleton">B · useWizard skeleton</a></li>
+
+      <li><a class="group">Wire it up</a></li>
+      <li><a href="#steps">C · Step views</a></li>
+      <li><a href="#nav">D · Nav + progress</a></li>
+      <li><a href="#submit">E · Validate + submit</a></li>
+
+      <li><a class="group">Mechanisms</a></li>
+      <li><a href="#enqueue">Offline enqueue</a></li>
+
+      <li><a class="group">Assembled</a></li>
+      <li><a href="#use-wizard">Full useWizard</a></li>
+      <li><a href="#mock">Mock layer (renders)</a></li>
+      <li><a href="#scaffold">Fast-start scaffold</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Multi-step Form Wizard — Composite Build</h1>
+    <div class="doc-sub">Progressive, block-by-block: one accumulated form object + a step index, per-step validation gating Next, converging on one offline-safe submit.</div>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <h2 id="architecture">Architecture &amp; build order</h2>
+    <p class="note">A single accumulated <code>form</code> object plus a <code>step</code> index are the single source of truth. Each step is a pure view over the form; <code>canAdvance(step, form)</code> gates Next; <code>submit</code> assembles the whole form and enqueues it offline-safe.</p>
+<pre><code>form: SiteForm   +   step: index        ← single source of truth
+   ▲                    │
+   │                    │
+ each step writes       │ canAdvance(step, form) gates Next
+ a patch (onChange)     │
+                   STEPS[step] renders the active view
+                        │
+                   submit() → enqueue(payload, idempotencyKey)   (offline outbox)</code></pre>
+    <p class="note">Build order — keep something runnable at every step: <strong>render one step → step views → nav + progress → gating → submit → harden.</strong> Each step below leaves a working app.</p>
+
+    <!-- ============ PLAN ============ -->
+    <h2 id="plan">60-min build — core vs stub</h2>
+    <p class="note">Build the core inline; leave deeper methods as stubs you flesh only if time permits. Runnable at every step; protect the last 10 min for Q&amp;A.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Build inline</th><th>mins</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Core (must)</strong></td><td>types · <code>STEPS</code> · <code>useState</code> index + form · render active step · controlled inputs · Back/Next</td><td>0–25</td></tr>
+        <tr><td><strong>Depth</strong></td><td><code>canAdvance</code> per step gating Next · progress indicator · Submit on last</td><td>25–42</td></tr>
+        <tr><td><strong>If time / verbal</strong></td><td>offline <code>enqueue</code> + idempotency · Zod per-step schema · resume-draft persist · photo step</td><td>42–50</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Stub-first: write the signature + a minimal body, say "I would flesh this," fill only if time allows.</p>
+<pre><code><span class="cmt">// MVP: required-field check inline. Enhance (if time): per-step Zod schema.</span>
+function canAdvance(step: StepKey, form: SiteForm): boolean {
+  if (step === 'details') return form.siteName.trim().length &gt; 0;
+  return true;                                <span class="cmt">// ← tighten each step here</span>
+}
+
+<span class="cmt">// MVP: POST directly. Enhance (if time): enqueue + drain on reconnect (offline outbox).</span>
+function submit(payload: unknown): void {
+  void fetch(`${API_URL}/assessments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}</code></pre>
+    <p class="note"><strong>Say the upgrade out loud even if you do not type it:</strong> "the inline check works for the demo; in production I would gate each step with its own Zod schema so every field has a typed validator and one error surface." That earns the depth credit without burning the clock.</p>
+
+    <!-- ============ SEAMS ============ -->
+    <h2 id="seams">Given helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+<span class="cmt">// validate at the boundary on the way out (one schema for the full payload)</span>
+async function postAssessment(payload: SiteForm): Promise&lt;{ id: string }&gt; {
+  const r = await fetch(`${API_URL}/assessments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+const makeId = () =&gt; `a-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;   <span class="cmt">// idempotency key</span></code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types"><span class="step">A</span>Types / data model</h2>
+    <p class="note">One flat <code>SiteForm</code> accumulates every step. <code>StepKey</code> names the steps; <code>STEPS</code> is the ordered list the index walks. Keeping steps in an array (not hardcoded) makes Back/Next and the progress dots fall out for free.</p>
+<pre><code>type SiteForm = {
+  siteName: string;
+  voltage: string;          <span class="cmt">// kept as string in the input; coerce on submit</span>
+  photoUris: string[];
+};
+
+type StepKey = 'details' | 'measurements' | 'photos' | 'review';
+
+const STEPS: StepKey[] = ['details', 'measurements', 'photos', 'review'];
+
+const EMPTY_FORM: SiteForm = { siteName: '', voltage: '', photoUris: [] };</code></pre>
+
+    <!-- ============ SKELETON ============ -->
+    <h2 id="skeleton"><span class="step">B</span>useWizard skeleton — the spine</h2>
+    <p class="note">No validation or submit yet — just the index, the form, and a guarded <code>next()</code>. <code>update</code> takes a <code>Partial&lt;SiteForm&gt;</code> so each step writes only its own fields. This compiles and (after C) renders a steppable wizard.</p>
+<pre><code>function useWizard() {
+  const [index, setIndex] = useState(0);               <span class="cmt">// ◀ which step</span>
+  const [form, setForm] = useState&lt;SiteForm&gt;(EMPTY_FORM);  <span class="cmt">// ◀ the one form object</span>
+
+  const step = STEPS[index];                            <span class="cmt">// current StepKey</span>
+  const isLast = index === STEPS.length - 1;
+
+  <span class="cmt">// each step writes a patch — never replaces the whole form</span>
+  const update = (patch: Partial&lt;SiteForm&gt;) =&gt; setForm((f) =&gt; ({ ...f, ...patch }));
+
+  const next = () =&gt; {
+    if (!canAdvance(step, form)) return;                <span class="cmt">// → E gates here</span>
+    setIndex((i) =&gt; Math.min(i + 1, STEPS.length - 1));
+  };
+  const back = () =&gt; setIndex((i) =&gt; Math.max(i - 1, 0));
+
+  return { index, step, isLast, form, update, next, back };
+}</code></pre>
+
+    <!-- ============ STEPS ============ -->
+    <h2 id="steps"><span class="step">C</span>Step views — controlled inputs</h2>
+    <p class="note">Each step is a dumb controlled component taking <code>{ form, onChange }</code> — it reads its slice of the form and writes a patch up. No step owns state; they are pure views over the one <code>form</code>. The wizard renders exactly one by <code>step</code>.</p>
+<pre><code>type StepProps = { form: SiteForm; onChange: (patch: Partial&lt;SiteForm&gt;) =&gt; void };
+
+function DetailsStep({ form, onChange }: StepProps) {
+  return (
+    &lt;View&gt;
+      &lt;Text style={styles.label}&gt;Site name&lt;/Text&gt;
+      &lt;TextInput
+        style={styles.input}
+        value={form.siteName}
+        onChangeText={(t) =&gt; onChange({ siteName: t })}
+        placeholder="e.g. North lot array"
+      /&gt;
+    &lt;/View&gt;
+  );
+}
+
+function MeasureStep({ form, onChange }: StepProps) {
+  return (
+    &lt;View&gt;
+      &lt;Text style={styles.label}&gt;Measured voltage (V)&lt;/Text&gt;
+      &lt;TextInput
+        style={styles.input}
+        value={form.voltage}
+        onChangeText={(t) =&gt; onChange({ voltage: t })}
+        keyboardType="numeric"
+        placeholder="e.g. 240"
+      /&gt;
+    &lt;/View&gt;
+  );
+}
+
+function PhotosStep({ form, onChange }: StepProps) {
+  const addPhoto = () =&gt;
+    onChange({ photoUris: [...form.photoUris, `photo://${form.photoUris.length + 1}`] });
+  return (
+    &lt;View&gt;
+      &lt;Text style={styles.label}&gt;Photos ({form.photoUris.length})&lt;/Text&gt;
+      &lt;Pressable style={styles.secondaryBtn} onPress={addPhoto}&gt;
+        &lt;Text&gt;Add photo&lt;/Text&gt;
+      &lt;/Pressable&gt;
+    &lt;/View&gt;
+  );
+}
+
+function ReviewStep({ form }: StepProps) {
+  return (
+    &lt;View&gt;
+      &lt;Text style={styles.label}&gt;Review&lt;/Text&gt;
+      &lt;Text&gt;Site: {form.siteName || '—'}&lt;/Text&gt;
+      &lt;Text&gt;Voltage: {form.voltage || '—'}&lt;/Text&gt;
+      &lt;Text&gt;Photos: {form.photoUris.length}&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// render the active step by key</span>
+function StepView({ step, form, onChange }: { step: StepKey } &amp; StepProps) {
+  switch (step) {
+    case 'details':      return &lt;DetailsStep form={form} onChange={onChange} /&gt;;
+    case 'measurements': return &lt;MeasureStep form={form} onChange={onChange} /&gt;;
+    case 'photos':       return &lt;PhotosStep form={form} onChange={onChange} /&gt;;
+    case 'review':       return &lt;ReviewStep form={form} onChange={onChange} /&gt;;
+  }
+}</code></pre>
+
+    <!-- ============ NAV ============ -->
+    <h2 id="nav"><span class="step">D</span>Nav + progress</h2>
+    <p class="note">A <code>WizardProgress</code> renders one segment per step, filled up to <code>index</code>. The nav row shows Back (disabled on the first step), then either Next (disabled when <code>!canAdvance</code>) or Submit on the last step. Both are pure renders of <code>index</code> / <code>isLast</code>.</p>
+<pre><code>function WizardProgress({ index }: { index: number }) {
+  return (
+    &lt;View style={styles.progress}&gt;
+      {STEPS.map((key, i) =&gt; (
+        &lt;View
+          key={key}
+          style={[styles.segment, i &lt;= index ? styles.segOn : styles.segOff]}
+        /&gt;
+      ))}
+    &lt;/View&gt;
+  );
+}
+
+function NavRow({
+  index, isLast, canNext, onBack, onNext, onSubmit,
+}: {
+  index: number; isLast: boolean; canNext: boolean;
+  onBack: () =&gt; void; onNext: () =&gt; void; onSubmit: () =&gt; void;
+}) {
+  return (
+    &lt;View style={styles.navRow}&gt;
+      &lt;Pressable
+        style={[styles.secondaryBtn, index === 0 &amp;&amp; styles.disabled]}
+        disabled={index === 0}
+        onPress={onBack}
+      &gt;
+        &lt;Text&gt;Back&lt;/Text&gt;
+      &lt;/Pressable&gt;
+
+      {isLast ? (
+        &lt;Pressable style={styles.primaryBtn} onPress={onSubmit}&gt;
+          &lt;Text style={styles.primaryText}&gt;Submit&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      ) : (
+        &lt;Pressable
+          style={[styles.primaryBtn, !canNext &amp;&amp; styles.disabled]}
+          disabled={!canNext}
+          onPress={onNext}
+        &gt;
+          &lt;Text style={styles.primaryText}&gt;Next&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      )}
+    &lt;/View&gt;
+  );
+}</code></pre>
+
+    <!-- ============ SUBMIT ============ -->
+    <h2 id="submit"><span class="step">E</span>Validate + submit</h2>
+    <p class="note"><code>canAdvance</code> is the gate Next reads — one switch over <code>StepKey</code>. The MVP does required-field checks; the upgrade swaps each arm for a per-step Zod schema. <code>submit</code> assembles the whole <code>form</code> into one payload, attaches a stable <code>idempotencyKey</code>, and hands it to <code>enqueue</code> (offline outbox) — never a bare POST in the component.</p>
+<pre><code>function canAdvance(step: StepKey, form: SiteForm): boolean {
+  switch (step) {
+    case 'details':      return form.siteName.trim().length &gt; 0;
+    case 'measurements': return Number(form.voltage) &gt; 0;          <span class="cmt">// numeric + present</span>
+    case 'photos':       return form.photoUris.length &gt; 0;         <span class="cmt">// at least one</span>
+    case 'review':       return true;                              <span class="cmt">// nothing to gate; Submit shows</span>
+  }
+}
+
+<span class="cmt">// upgrade (verbal or if time): per-step Zod schema</span>
+<span class="cmt">// const StepSchemas: Record&lt;StepKey, z.ZodTypeAny&gt; = { details: z.object({ siteName: z.string().min(1) }), ... };</span>
+<span class="cmt">// const canAdvance = (s, f) =&gt; StepSchemas[s].safeParse(f).success;</span>
+
+function submit(form: SiteForm) {
+  const payload = { ...form, voltage: Number(form.voltage) };      <span class="cmt">// assemble all steps into one payload</span>
+  enqueue({
+    idempotencyKey: makeId(),                                      <span class="cmt">// retry-safe — server dedups</span>
+    url: `${API_URL}/assessments`,
+    method: 'POST',
+    body: payload,
+  });
+}</code></pre>
+    <p class="note">Because every step writes into the same <code>form</code>, <code>submit</code> needs no gathering step — the form <em>is</em> the payload. Coerce string inputs (<code>voltage</code>) to their real types only here, at the edge.</p>
+
+    <!-- ============ ENQUEUE ============ -->
+    <h2 id="enqueue"><span class="step">mechanism</span>Offline enqueue (signature + minimal stub)</h2>
+    <p class="note">Field forms are filled where connectivity is unreliable, so submit must be offline-safe: persist the job, return immediately, drain on reconnect. Each job carries an <code>idempotencyKey</code> so a retry can't create a duplicate assessment. Generic — any feature enqueues any request. The minimal stub below just POSTs so the demo runs; the production body persists to MMKV and drains via NetInfo.</p>
+<pre><code>type Job = {
+  idempotencyKey: string;
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body: unknown;
+};
+
+<span class="cmt">// signature the wizard calls — production body persists + drains on reconnect</span>
+export function enqueue(job: Job): void {
+  <span class="cmt">// (prod) persist to MMKV, then void drain(); — see offline-outbox doc</span>
+  void fetch(job.url, {                                <span class="cmt">// (demo) minimal direct POST so submit fires</span>
+    method: job.method,
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': job.idempotencyKey },
+    body: JSON.stringify(job.body),
+  });
+}
+
+<span class="cmt">// (prod) sketch — same shape as a generic outbox:</span>
+<span class="cmt">//   const jobs = load(); jobs.push(job); save(jobs);   // MMKV</span>
+<span class="cmt">//   void drain();                                       // on reconnect via NetInfo listener</span>
+<span class="cmt">//   drain: while connected, POST head with Idempotency-Key, drop on 2xx, stop on failure</span></code></pre>
+
+    <!-- ============ FULL USEWIZARD ============ -->
+    <h2 id="use-wizard"><span class="step">assembled</span>Full useWizard + screen</h2>
+    <p class="note">The hook owns index + form + transitions; the screen is a pure render of it — progress, the active step, and the nav row. <code>canNext</code> is computed once per render and feeds the Next button's disabled state.</p>
+<pre><code>function useWizard(onDone: (id: string) =&gt; void) {
+  const [index, setIndex] = useState(0);
+  const [form, setForm] = useState&lt;SiteForm&gt;(EMPTY_FORM);
+
+  const step = STEPS[index];
+  const isLast = index === STEPS.length - 1;
+
+  const update = (patch: Partial&lt;SiteForm&gt;) =&gt; setForm((f) =&gt; ({ ...f, ...patch }));
+  const next = () =&gt; { if (canAdvance(step, form)) setIndex((i) =&gt; Math.min(i + 1, STEPS.length - 1)); };
+  const back = () =&gt; setIndex((i) =&gt; Math.max(i - 1, 0));
+
+  const submit = () =&gt; {
+    const payload = { ...form, voltage: Number(form.voltage) };
+    enqueue({ idempotencyKey: makeId(), url: `${API_URL}/assessments`, method: 'POST', body: payload });
+    onDone('queued');                                  <span class="cmt">// optimistic — outbox owns delivery</span>
+  };
+
+  return { index, step, isLast, form, update, next, back, submit, canNext: canAdvance(step, form) };
+}
+
+function WizardScreen() {
+  const { index, step, isLast, form, update, next, back, submit, canNext } =
+    useWizard((id) =&gt; Alert.alert('Submitted', `Assessment ${id}`));
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;WizardProgress index={index} /&gt;
+      &lt;View style={styles.body}&gt;
+        &lt;StepView step={step} form={form} onChange={update} /&gt;
+      &lt;/View&gt;
+      &lt;NavRow
+        index={index} isLast={isLast} canNext={canNext}
+        onBack={back} onNext={next} onSubmit={submit}
+      /&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}</code></pre>
+
+    <!-- ============ MOCK ============ -->
+    <h2 id="mock">Mock layer — so submit shows up</h2>
+    <p class="note">There is no read path to mock (the form starts empty), so the only seam is the write: keep <code>enqueue</code> as a direct POST, or in a demo swap it for an <code>Alert</code> so submit is observable with no server. Strong move in the round: "I will fake the submit so we can see the full flow end-to-end."</p>
+<pre><code><span class="cmt">// Drop-in for enqueue: same signature, no network — just proves the wiring.</span>
+function enqueue(job: Job): void {
+  console.log('enqueue', job.idempotencyKey, job.body);
+  Alert.alert('Queued', `1 assessment queued (key ${job.idempotencyKey})`);
+}
+
+<span class="cmt">// Or simulate the round-trip with latency + a fake id, if you want a "real" feel:</span>
+async function postAssessment(payload: SiteForm): Promise&lt;{ id: string }&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));        <span class="cmt">// simulate latency</span>
+  return { id: makeId() };
+}</code></pre>
+    <p class="note">With <code>enqueue</code> stubbed, the assembled <code>WizardScreen</code> steps through all four screens, gates Next until each step validates, and pops an alert on Submit — no backend. Swap the stub for the real offline outbox (one body) for prod; the call site never changes.</p>
+
+    <!-- ============ SCAFFOLD ============ -->
+    <h2 id="scaffold">Fast-start scaffold — minute 1 paste</h2>
+    <p class="note">One complete, runnable file: four steps + controlled inputs, progress, gating, and a mock submit. Paste it → the wizard renders immediately, Next stays disabled until each step is valid, Submit pops an alert → then deepen the marked stubs.</p>
+<pre><code>import React, { useState } from 'react';
+import {
+  View, Text, TextInput, Pressable, SafeAreaView, Alert, StyleSheet,
+} from 'react-native';
+
+<span class="cmt">// ── types ──</span>
+type SiteForm = { siteName: string; voltage: string; photoUris: string[] };
+type StepKey = 'details' | 'measurements' | 'photos' | 'review';
+const STEPS: StepKey[] = ['details', 'measurements', 'photos', 'review'];
+const EMPTY_FORM: SiteForm = { siteName: '', voltage: '', photoUris: [] };
+
+const API_URL = 'https://example.com/api';
+const makeId = () =&gt; `a-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+<span class="cmt">// ── mechanism: offline enqueue — stubbed as Alert so submit is visible ──</span>
+type Job = { idempotencyKey: string; url: string; method: 'POST'; body: unknown };
+function enqueue(job: Job): void {
+  <span class="cmt">// (prod) persist to MMKV + drain on reconnect via NetInfo</span>
+  Alert.alert('Submitted', `Queued assessment (key ${job.idempotencyKey})`);
+}
+
+<span class="cmt">// ── validation gate (deepen → per-step Zod schema) ──</span>
+function canAdvance(step: StepKey, form: SiteForm): boolean {
+  switch (step) {
+    case 'details':      return form.siteName.trim().length &gt; 0;
+    case 'measurements': return Number(form.voltage) &gt; 0;
+    case 'photos':       return form.photoUris.length &gt; 0;
+    case 'review':       return true;
+  }
+}
+
+<span class="cmt">// ── step views: dumb, controlled ──</span>
+type StepProps = { form: SiteForm; onChange: (patch: Partial&lt;SiteForm&gt;) =&gt; void };
+
+function StepView({ step, form, onChange }: { step: StepKey } &amp; StepProps) {
+  switch (step) {
+    case 'details':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Site name&lt;/Text&gt;
+          &lt;TextInput style={styles.input} value={form.siteName}
+            onChangeText={(t) =&gt; onChange({ siteName: t })} placeholder="North lot array" /&gt;
+        &lt;/View&gt;
+      );
+    case 'measurements':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Measured voltage (V)&lt;/Text&gt;
+          &lt;TextInput style={styles.input} value={form.voltage} keyboardType="numeric"
+            onChangeText={(t) =&gt; onChange({ voltage: t })} placeholder="240" /&gt;
+        &lt;/View&gt;
+      );
+    case 'photos':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Photos ({form.photoUris.length})&lt;/Text&gt;
+          &lt;Pressable style={styles.secondaryBtn}
+            onPress={() =&gt; onChange({ photoUris: [...form.photoUris, `photo://${form.photoUris.length + 1}`] })}&gt;
+            &lt;Text&gt;Add photo&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        &lt;/View&gt;
+      );
+    case 'review':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Review&lt;/Text&gt;
+          &lt;Text&gt;Site: {form.siteName || '—'}&lt;/Text&gt;
+          &lt;Text&gt;Voltage: {form.voltage || '—'}&lt;/Text&gt;
+          &lt;Text&gt;Photos: {form.photoUris.length}&lt;/Text&gt;
+        &lt;/View&gt;
+      );
+  }
+}
+
+<span class="cmt">// ── progress + nav ──</span>
+function WizardProgress({ index }: { index: number }) {
+  return (
+    &lt;View style={styles.progress}&gt;
+      {STEPS.map((key, i) =&gt; (
+        &lt;View key={key} style={[styles.segment, i &lt;= index ? styles.segOn : styles.segOff]} /&gt;
+      ))}
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// ── useWizard: the integration ──</span>
+function useWizard() {
+  const [index, setIndex] = useState(0);
+  const [form, setForm] = useState&lt;SiteForm&gt;(EMPTY_FORM);
+  const step = STEPS[index];
+  const isLast = index === STEPS.length - 1;
+
+  const update = (patch: Partial&lt;SiteForm&gt;) =&gt; setForm((f) =&gt; ({ ...f, ...patch }));
+  const next = () =&gt; { if (canAdvance(step, form)) setIndex((i) =&gt; Math.min(i + 1, STEPS.length - 1)); };
+  const back = () =&gt; setIndex((i) =&gt; Math.max(i - 1, 0));
+  const submit = () =&gt; {
+    const payload = { ...form, voltage: Number(form.voltage) };
+    enqueue({ idempotencyKey: makeId(), url: `${API_URL}/assessments`, method: 'POST', body: payload });
+  };
+
+  return { index, step, isLast, form, update, next, back, submit, canNext: canAdvance(step, form) };
+}
+
+<span class="cmt">// ── screen: ready ──</span>
+export default function App() {
+  const { index, step, isLast, form, update, next, back, submit, canNext } = useWizard();
+
+  return (
+    &lt;SafeAreaView style={styles.screen}&gt;
+      &lt;WizardProgress index={index} /&gt;
+      &lt;View style={styles.body}&gt;
+        &lt;StepView step={step} form={form} onChange={update} /&gt;
+      &lt;/View&gt;
+      &lt;View style={styles.navRow}&gt;
+        &lt;Pressable style={[styles.secondaryBtn, index === 0 &amp;&amp; styles.disabled]}
+          disabled={index === 0} onPress={back}&gt;
+          &lt;Text&gt;Back&lt;/Text&gt;
+        &lt;/Pressable&gt;
+        {isLast ? (
+          &lt;Pressable style={styles.primaryBtn} onPress={submit}&gt;
+            &lt;Text style={styles.primaryText}&gt;Submit&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        ) : (
+          &lt;Pressable style={[styles.primaryBtn, !canNext &amp;&amp; styles.disabled]}
+            disabled={!canNext} onPress={next}&gt;
+            &lt;Text style={styles.primaryText}&gt;Next&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        )}
+      &lt;/View&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: 16 },
+  progress: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  segment: { flex: 1, height: 4, borderRadius: 2 },
+  segOn: { backgroundColor: '#0084ff' },
+  segOff: { backgroundColor: '#e0e0e0' },
+  body: { flex: 1 },
+  label: { fontSize: 13, color: '#57606a', marginBottom: 6, marginTop: 12 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  navRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingTop: 12 },
+  primaryBtn: { backgroundColor: '#0084ff', paddingHorizontal: 22, paddingVertical: 12, borderRadius: 10 },
+  primaryText: { color: '#fff', fontWeight: '600' },
+  secondaryBtn: { borderWidth: 1, borderColor: '#ccc', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10 },
+  disabled: { opacity: 0.4 },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · <code>STEPS</code> · all four step views + controlled inputs · progress · nav + gating · styles. <strong>Deepen as time allows:</strong> <code>canAdvance</code> (inline checks → per-step Zod schema) · <code>enqueue</code> (Alert → offline outbox with MMKV + drain) · split step components out of the switch · resume-draft persist. The wizard steps through and gates from minute 1 regardless.</p>
+
+    <!-- ============ EXTENSIONS ============ -->
+    <h2 id="extensions">Extensions</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>Capture photos / scan a serial</td><td>A camera step backed by <code>expo-camera</code> (or a QR/barcode scanner); push captured uris into <code>form.photoUris</code> via the same <code>onChange</code> patch — the step stays a pure view.</td></tr>
+        <tr><td>Resume a half-filled form</td><td>Persist <code>form</code> (and <code>index</code>) to MMKV on every <code>update</code>; hydrate <code>EMPTY_FORM</code> from storage on mount. The single-source-of-truth shape makes this a one-line read/write.</td></tr>
+        <tr><td>Steps that depend on earlier answers</td><td>Derive <code>STEPS</code> from the form instead of a constant (e.g. skip <code>measurements</code> when a type is "visual only"); the index logic and progress dots adapt with no other change.</td></tr>
+        <tr><td>Photo upload with progress</td><td>Upload each photo as its own outbox job (multipart) with a per-file progress callback; the review step shows uploaded vs pending, and submit only needs the resulting uris.</td></tr>
+        <tr><td>Richer transitions / many fields</td><td>Swap the two <code>useState</code> for a <code>useReducer</code> — actions like <code>NEXT</code> / <code>BACK</code> / <code>PATCH</code> / <code>RESET</code> centralize the transition rules and keep guards in one place as the form grows.</td></tr>
+        <tr><td>Single source of truth</td><td>Keep every field in the one <code>form</code> object — never let a step hold its own copy, or the review/submit payload drifts from what the user sees.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>

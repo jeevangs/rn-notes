@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Live Telemetry Tile — Composite Build</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  .label-bad { color: var(--bad); font-weight: 600; }
+  .label-good { color: var(--good); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Telemetry Tile</h1>
+    <ul>
+      <li><a class="group">Overview</a></li>
+      <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#plan">60-min build — core vs stub</a></li>
+      <li><a href="#seams">Given helpers</a></li>
+
+      <li><a class="group">Foundation</a></li>
+      <li><a href="#types">A · Types</a></li>
+      <li><a href="#store">B · Store</a></li>
+
+      <li><a class="group">Wire it up</a></li>
+      <li><a href="#ingest">C · Ingest</a></li>
+      <li><a href="#tile">D · Tile</a></li>
+      <li><a href="#baseline">E · Baseline + reconnect</a></li>
+
+      <li><a class="group">Mechanisms</a></li>
+      <li><a href="#ws">useWebSocket</a></li>
+
+      <li><a class="group">Assembled</a></li>
+      <li><a href="#use-telemetry">Full hook</a></li>
+      <li><a href="#mock">Mock layer (renders)</a></li>
+      <li><a href="#scaffold">Fast-start scaffold</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Live Telemetry Tile — Composite Build</h1>
+    <div class="doc-sub">Progressive, block-by-block: a dashboard of tiles, each showing one source's live battery % and speed, updating over a WebSocket at ~5Hz without re-rendering the whole grid.</div>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <h2 id="architecture">Architecture &amp; build order</h2>
+    <p class="note">A Zustand store <code>byId: Record&lt;string, Telemetry&gt;</code> is the live source of truth. Frames are <strong>coalesced</strong> in a non-reactive buffer and flushed on an interval, so React renders at ~5Hz instead of per-frame. Each tile subscribes to <em>only its own id</em>, so only the changed tile re-renders.</p>
+<pre><code>WebSocket frames  (~30–60/sec, bursty)
+        │
+        ▼
+buffer (ref / module object)        ← NON-reactive: writes do NOT re-render
+        │   setInterval ~200ms (5Hz)
+        ▼   flush + clear
+Zustand store   byId[id] = Telemetry  ← single source of truth (ts-guarded merge)
+        │
+        ▼   per-id selector: useStore(s =&gt; s.byId[id])
+Tile (memo)     one tile re-renders    ← only the changed id, not the grid
+        ▲
+        │
+REST baseline (useQuery) seeds byId on mount; WS deltas patch from there</code></pre>
+    <p class="note">Build order — keep something runnable at every step: <strong>render → store → ingest → per-tile select → baseline → harden.</strong> Start with the store + a fake emitter so tiles paint, then layer the real socket and guards.</p>
+
+    <!-- ============ PLAN ============ -->
+    <h2 id="plan">60-min build — core vs stub</h2>
+    <p class="note">Build the core inline; leave deeper methods as stubs you flesh only if time permits. Runnable at every step; protect the last 10 min for Q&amp;A.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Build inline</th><th>mins</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Core (must)</strong></td><td>types · store with <code>applyPatch</code> · mock emitter into the store · per-id selector in a <code>memo</code>'d <code>Tile</code> · dashboard renders live tiles</td><td>0–25</td></tr>
+        <tr><td><strong>Depth</strong></td><td>coalescing buffer + interval flush (5Hz) · ts-guard against stale frames</td><td>25–42</td></tr>
+        <tr><td><strong>If time / verbal</strong></td><td>REST baseline seed · real <code>useWebSocket</code> + reconnect · backpressure / drop-oldest · shallow selector</td><td>42–50</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Stub-first: write the signature + a minimal body, say "I would flesh this," fill only if time allows.</p>
+<pre><code><span class="cmt">// MVP: write each frame straight to the store. Enhance (if time): coalesce in a buffer + flush at 5Hz.</span>
+function ingestFrame(patch: Telemetry): void {
+  useStore.getState().applyPatch(patch);      <span class="cmt">// ← the coalescing buffer lands here</span>
+}
+
+<span class="cmt">// MVP: last write wins. Enhance (if time): drop the frame if it is older than what we already have.</span>
+function isNewer(prev: Telemetry | undefined, next: Telemetry): boolean {
+  return true;                                <span class="cmt">// ← the ts-guard upgrade lands here</span>
+}</code></pre>
+    <p class="note"><strong>Say the upgrade out loud even if you do not type it:</strong> "writing every frame works for the demo; at 5Hz across many sources I would coalesce frames in a ref buffer and flush on an interval so React renders ~5x/sec, not 30–60x." That earns the depth credit without burning the clock.</p>
+
+    <!-- ============ SEAMS ============ -->
+    <h2 id="seams">Given helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+async function getBaseline(): Promise&lt;Telemetry[]&gt; {
+  const r = await fetch(`${API_URL}/telemetry`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return TelemetryListSchema.parse(await r.json());   <span class="cmt">// validate at the boundary</span>
+}
+
+const wsUrl = () =&gt; 'wss://example.com/telemetry';     <span class="cmt">// one multiplexed stream for all ids</span>
+
+const FLUSH_MS = 200;                                  <span class="cmt">// 200ms = 5Hz render cadence</span></code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types"><span class="step">A</span>Types / data model</h2>
+    <p class="note"><code>vehicleId</code> keys the store map and routes each frame to its tile. <code>ts</code> drives the stale-frame guard. Battery is a percent; speed is a scalar — both are the only fields a tile renders.</p>
+<pre><code>import { z } from 'zod';
+
+const TelemetrySchema = z.object({
+  vehicleId: z.string(),             <span class="cmt">// map key → ROUTES the frame to its tile</span>
+  battery: z.number(),               <span class="cmt">// percent 0–100</span>
+  speed: z.number(),                 <span class="cmt">// scalar</span>
+  ts: z.number(),                    <span class="cmt">// epoch ms → STALE-FRAME guard</span>
+});
+const TelemetryListSchema = z.array(TelemetrySchema);
+
+type Telemetry = z.infer&lt;typeof TelemetrySchema&gt;;</code></pre>
+
+    <!-- ============ STORE ============ -->
+    <h2 id="store"><span class="step">B</span>Store — the spine</h2>
+    <p class="note">A Zustand <code>create</code> with <code>byId</code> and one <code>applyPatch</code> action. The action is ts-guarded: a frame that is older than what is already stored is dropped, so a late/out-of-order delivery never overwrites a newer value. Writing per-id (not replacing the whole map) is what lets a per-id selector stay narrow.</p>
+<pre><code>import { create } from 'zustand';
+
+type TelemetryState = {
+  byId: Record&lt;string, Telemetry&gt;;
+  applyPatch: (patch: Telemetry) =&gt; void;
+  applyMany: (patches: Telemetry[]) =&gt; void;   <span class="cmt">// used by the flush (one render for the batch)</span>
+};
+
+export const useStore = create&lt;TelemetryState&gt;((set, get) =&gt; ({
+  byId: {},
+
+  applyPatch: (patch) =&gt; {
+    const prev = get().byId[patch.vehicleId];
+    if (prev &amp;&amp; prev.ts &gt;= patch.ts) return;     <span class="cmt">// ts-guard: drop stale / out-of-order</span>
+    set((s) =&gt; ({ byId: { ...s.byId, [patch.vehicleId]: patch } }));
+  },
+
+  applyMany: (patches) =&gt; set((s) =&gt; {
+    const next = { ...s.byId };
+    for (const p of patches) {
+      const prev = next[p.vehicleId];
+      if (prev &amp;&amp; prev.ts &gt;= p.ts) continue;      <span class="cmt">// same guard, applied per id in the batch</span>
+      next[p.vehicleId] = p;
+    }
+    return { byId: next };                       <span class="cmt">// one set() → one render pass for the whole flush</span>
+  }),
+}));</code></pre>
+
+    <!-- ============ INGEST ============ -->
+    <h2 id="ingest"><span class="step">C</span>Ingest — coalesce + flush</h2>
+    <p class="note">The hook opens the socket and writes every incoming frame into a <strong>buffer ref</strong> (not state — writes here do not re-render). A <code>setInterval</code> flushes the buffer into the store every <code>FLUSH_MS</code> and clears it. Last frame per id wins inside the buffer, so a burst collapses to one patch per id per flush.</p>
+<pre><code>function useTelemetryIngest() {
+  const bufferRef = useRef&lt;Record&lt;string, Telemetry&gt;&gt;({});
+
+  <span class="cmt">// WRITER: every frame coalesces into the buffer (non-reactive — no render)</span>
+  useTelemetrySocket((frame) =&gt; {
+    const prev = bufferRef.current[frame.vehicleId];
+    if (prev &amp;&amp; prev.ts &gt;= frame.ts) return;       <span class="cmt">// keep newest within the buffer window</span>
+    bufferRef.current[frame.vehicleId] = frame;
+  });
+
+  <span class="cmt">// FLUSH: drain the buffer into the store at 5Hz, then clear</span>
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const batch = Object.values(bufferRef.current);
+      if (batch.length === 0) return;
+      bufferRef.current = {};                       <span class="cmt">// clear before applying (avoid losing arrivals mid-flush)</span>
+      useStore.getState().applyMany(batch);
+    }, FLUSH_MS);
+    return () =&gt; clearInterval(id);
+  }, []);
+}</code></pre>
+    <p class="note">Why the buffer is a ref, not state: 30–60 frames/sec into <code>useState</code> would queue 30–60 renders/sec. The ref absorbs the burst silently; only the interval touches the store, capping renders at ~5/sec.</p>
+
+    <!-- ============ TILE ============ -->
+    <h2 id="tile"><span class="step">D</span>Tile — narrow per-id subscription</h2>
+    <p class="note">The tile reads <strong>only its own id</strong> from the store. When that id&apos;s value changes, only this tile re-renders — the other tiles&apos; selectors return the same reference and skip. Wrapping in <code>memo</code> stops a parent render from cascading.</p>
+<pre><code>const Tile = memo(function Tile({ id }: { id: string }) {
+  const t = useStore((s) =&gt; s.byId[id]);          <span class="cmt">// ◀ subscribe to ONE id only</span>
+
+  if (!t) return &lt;View style={styles.tile}&gt;&lt;Text style={styles.dim}&gt;{id} — waiting…&lt;/Text&gt;&lt;/View&gt;;
+
+  return (
+    &lt;View style={styles.tile}&gt;
+      &lt;Text style={styles.tileId}&gt;{id}&lt;/Text&gt;
+      &lt;Text style={styles.metric}&gt;{Math.round(t.battery)}%&lt;/Text&gt;
+      &lt;Text style={styles.sub}&gt;{Math.round(t.speed)} mph&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});</code></pre>
+    <p class="note"><span class="label-bad">Wrong:</span> <code>const all = useStore((s) =&gt; s.byId)</code> in the parent and pass <code>all[id]</code> down — every tile re-renders on <em>any</em> id&apos;s change, because the whole-map reference changes each patch. <span class="label-good">Right:</span> each tile selects <code>s.byId[id]</code> itself, so a patch to one id wakes one tile.</p>
+<pre><code><span class="cmt">// label-bad — whole-collection selector: one frame → N tiles re-render</span>
+const all = useStore((s) =&gt; s.byId);              <span class="cmt">// new object ref every patch</span>
+return ids.map((id) =&gt; &lt;Tile data={all[id]} /&gt;);   <span class="cmt">// all N re-render</span>
+
+<span class="cmt">// label-good — per-id selector inside each Tile: one frame → 1 tile re-renders</span>
+const t = useStore((s) =&gt; s.byId[id]);            <span class="cmt">// unchanged ids return same ref → skip</span></code></pre>
+
+    <!-- ============ BASELINE ============ -->
+    <h2 id="baseline"><span class="step">E</span>Baseline + reconnect</h2>
+    <p class="note">A REST <code>useQuery</code> seeds initial values into the store on mount, so tiles show real numbers before the first socket frame. WS deltas patch from there. Reconnect / backoff is owned by <code>useWebSocket</code> — the ingest layer never sees a disconnect.</p>
+<pre><code>function useBaseline() {
+  return useQuery({
+    queryKey: ['telemetry-baseline'],
+    queryFn: getBaseline,
+    staleTime: Infinity,                          <span class="cmt">// seed once; live deltas keep it fresh after</span>
+    onSuccess: (rows) =&gt; useStore.getState().applyMany(rows),  <span class="cmt">// ts-guarded → live frames already won&apos;t be clobbered</span>
+  });
+}</code></pre>
+    <p class="note">Because <code>applyMany</code> is ts-guarded, a late baseline response can never overwrite a newer live frame that already arrived — the seed and the stream share one merge rule.</p>
+
+    <!-- ============ WEBSOCKET ============ -->
+    <h2 id="ws"><span class="step">mechanism</span>useWebSocket (generic)</h2>
+    <p class="note">A reusable transport primitive — stable-ref handler so it reconnects only on <code>[url]</code>, with jittered backoff. The telemetry layer wraps this; it knows nothing about telemetry.</p>
+<pre><code>type WsStatus = 'idle' | 'connecting' | 'open' | 'closed';
+
+function useWebSocket&lt;T&gt;(url: string, onMessage: (msg: T) =&gt; void) {
+  const [status, setStatus] = useState&lt;WsStatus&gt;('idle');
+  const wsRef = useRef&lt;WebSocket | null&gt;(null);
+  const attemptsRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;                 <span class="cmt">// latest handler, every render — no reconnect</span>
+
+  useEffect(() =&gt; {
+    isMountedRef.current = true;
+
+    const connect = () =&gt; {
+      if (!isMountedRef.current) return;
+      setStatus('connecting');
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () =&gt; { attemptsRef.current = 0; setStatus('open'); };
+      ws.onmessage = (e) =&gt; { try { onMessageRef.current(JSON.parse(e.data) as T); } catch {} };
+      ws.onerror = () =&gt; ws.close();
+      ws.onclose = () =&gt; {
+        setStatus('closed');                        <span class="cmt">// status</span>
+        if (!isMountedRef.current) return;           <span class="cmt">// guard</span>
+        const attempt = ++attemptsRef.current;       <span class="cmt">// backoff</span>
+        const delay = Math.min(30_000, 1000 * 2 ** attempt) + Math.random() * 1000;
+        setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+    return () =&gt; { isMountedRef.current = false; wsRef.current?.close(); };
+  }, [url]);                                         <span class="cmt">// [url] only — handler is refed</span>
+
+  return { status };
+}</code></pre>
+
+    <!-- ============ FULL HOOK ============ -->
+    <h2 id="use-telemetry"><span class="step">assembled</span>Full hook</h2>
+    <p class="note">The telemetry socket wrapper validates each frame and feeds the buffer; the ingest hook flushes; the baseline seeds. One <code>useDashboard</code> composes all three so a screen calls one hook.</p>
+<pre><code><span class="cmt">// wrap the generic socket: validate frames, hand clean Telemetry to the buffer</span>
+function useTelemetrySocket(onFrame: (t: Telemetry) =&gt; void) {
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
+
+  useWebSocket&lt;unknown&gt;(wsUrl(), (raw) =&gt; {
+    const parsed = TelemetrySchema.safeParse(raw);   <span class="cmt">// validate (don&apos;t trust `as T`)</span>
+    if (!parsed.success) return;                     <span class="cmt">// drop garbage frames</span>
+    onFrameRef.current(parsed.data);
+  });
+}
+
+function useTelemetryIngest() {
+  const bufferRef = useRef&lt;Record&lt;string, Telemetry&gt;&gt;({});
+
+  useTelemetrySocket((frame) =&gt; {
+    const prev = bufferRef.current[frame.vehicleId];
+    if (prev &amp;&amp; prev.ts &gt;= frame.ts) return;
+    bufferRef.current[frame.vehicleId] = frame;
+  });
+
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const batch = Object.values(bufferRef.current);
+      if (batch.length === 0) return;
+      bufferRef.current = {};
+      useStore.getState().applyMany(batch);
+    }, FLUSH_MS);
+    return () =&gt; clearInterval(id);
+  }, []);
+}
+
+<span class="cmt">// one hook a screen calls: seed + live ingest + the list of ids to render</span>
+function useDashboard() {
+  useBaseline();        <span class="cmt">// REST seed → store</span>
+  useTelemetryIngest(); <span class="cmt">// WS deltas → buffer → store (5Hz)</span>
+  const ids = useStore((s) =&gt; Object.keys(s.byId));   <span class="cmt">// grid only re-renders when the SET of ids changes</span>
+  return { ids };
+}</code></pre>
+    <p class="note"><code>Object.keys(s.byId)</code> only changes when an id is added/removed — so the grid layout is stable while values stream; the per-tile selectors carry the high-frequency updates.</p>
+
+    <!-- ============ MOCK ============ -->
+    <h2 id="mock">Mock layer — so the screen shows up</h2>
+    <p class="note">Mock the socket so the dashboard renders without a server, then swap for the real <code>useTelemetrySocket</code> in prod. Same signature, fake emitter — it pushes random battery/speed for a few ids at 5Hz into the same buffer.</p>
+<pre><code>const MOCK_IDS = ['veh-1', 'veh-2', 'veh-3'];
+
+async function getBaseline(): Promise&lt;Telemetry[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));      <span class="cmt">// simulate latency</span>
+  return MOCK_IDS.map((vehicleId) =&gt; ({
+    vehicleId, battery: 50 + Math.random() * 50, speed: 0, ts: Date.now(),
+  }));
+}
+
+<span class="cmt">// Drop-in for useTelemetrySocket: same signature, fake emitter.</span>
+<span class="cmt">// Emits a frame for a random id every ~33ms (~30Hz) → the buffer coalesces it down to 5Hz.</span>
+function useTelemetrySocket(onFrame: (t: Telemetry) =&gt; void) {
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const vehicleId = MOCK_IDS[Math.floor(Math.random() * MOCK_IDS.length)];
+      onFrameRef.current({
+        vehicleId,
+        battery: 20 + Math.random() * 80,
+        speed: Math.random() * 80,
+        ts: Date.now(),
+      });
+    }, 33);                                          <span class="cmt">// ~30 frames/sec, like a real stream</span>
+    return () =&gt; clearInterval(id);
+  }, []);
+}</code></pre>
+    <p class="note">With these defined, the dashboard seeds three tiles from the baseline, then each tile updates ~5x/sec while the emitter fires ~30x/sec — visible proof the buffer is collapsing the burst. Swap the mock <code>useTelemetrySocket</code> for the real <code>useWebSocket</code>-based one (one block) for prod.</p>
+
+    <!-- ============ SCAFFOLD ============ -->
+    <h2 id="scaffold">Fast-start scaffold — minute 1 paste</h2>
+    <p class="note">One complete, runnable file: store + buffer/flush wired, mock socket so tiles stream, UI + styles ready, baseline mocked. Paste it → the screen shows live-updating tiles immediately → then deepen the marked stubs (real socket, ts-guard hardening, REST baseline).</p>
+<pre><code>import React, { useState, useEffect, useRef, memo } from 'react';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { create } from 'zustand';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Telemetry = { vehicleId: string; battery: number; speed: number; ts: number };
+
+<span class="cmt">// ── config / mock backend (swap for real) ──</span>
+const API_URL = 'https://example.com/api';
+const FLUSH_MS = 200;                          <span class="cmt">// 5Hz</span>
+const MOCK_IDS = ['veh-1', 'veh-2', 'veh-3'];
+
+async function getBaseline(): Promise&lt;Telemetry[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  return MOCK_IDS.map((vehicleId) =&gt; ({ vehicleId, battery: 50 + Math.random() * 50, speed: 0, ts: Date.now() }));
+}
+
+<span class="cmt">// ── store: the source of truth (ts-guarded) ──</span>
+type TelemetryState = {
+  byId: Record&lt;string, Telemetry&gt;;
+  applyMany: (patches: Telemetry[]) =&gt; void;
+};
+const useStore = create&lt;TelemetryState&gt;((set) =&gt; ({
+  byId: {},
+  applyMany: (patches) =&gt; set((s) =&gt; {
+    const next = { ...s.byId };
+    for (const p of patches) {
+      const prev = next[p.vehicleId];
+      if (prev &amp;&amp; prev.ts &gt;= p.ts) continue;     <span class="cmt">// drop stale / out-of-order</span>
+      next[p.vehicleId] = p;
+    }
+    return { byId: next };                       <span class="cmt">// one set() per flush → one render pass</span>
+  }),
+}));
+
+<span class="cmt">// ── mechanisms ──</span>
+<span class="cmt">// (prod) your reconnect + backoff hook — signature only here:</span>
+declare function useWebSocket&lt;T&gt;(url: string, onMessage: (m: T) =&gt; void): { status: string };
+
+<span class="cmt">// (prod) real wrapper validates frames + uses useWebSocket:</span>
+<span class="cmt">//   function useTelemetrySocket(onFrame) {</span>
+<span class="cmt">//     useWebSocket&lt;unknown&gt;('wss://example.com/telemetry', (raw) =&gt; {</span>
+<span class="cmt">//       const p = TelemetrySchema.safeParse(raw); if (p.success) onFrame(p.data);</span>
+<span class="cmt">//     });</span>
+<span class="cmt">//   }</span>
+<span class="cmt">// (demo) mock socket — emits ~30Hz so the 5Hz flush visibly coalesces:</span>
+function useTelemetrySocket(onFrame: (t: Telemetry) =&gt; void) {
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const vehicleId = MOCK_IDS[Math.floor(Math.random() * MOCK_IDS.length)];
+      onFrameRef.current({ vehicleId, battery: 20 + Math.random() * 80, speed: Math.random() * 80, ts: Date.now() });
+    }, 33);
+    return () =&gt; clearInterval(id);
+  }, []);
+}
+
+<span class="cmt">// ── ingest: coalesce in a ref buffer, flush to the store at 5Hz ──</span>
+function useTelemetryIngest() {
+  const bufferRef = useRef&lt;Record&lt;string, Telemetry&gt;&gt;({});
+  useTelemetrySocket((frame) =&gt; {
+    const prev = bufferRef.current[frame.vehicleId];
+    if (prev &amp;&amp; prev.ts &gt;= frame.ts) return;
+    bufferRef.current[frame.vehicleId] = frame;     <span class="cmt">// non-reactive write → no render</span>
+  });
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const batch = Object.values(bufferRef.current);
+      if (batch.length === 0) return;
+      bufferRef.current = {};
+      useStore.getState().applyMany(batch);
+    }, FLUSH_MS);
+    return () =&gt; clearInterval(id);
+  }, []);
+}
+
+<span class="cmt">// ── dashboard hook: seed + live ingest + id list ──</span>
+function useDashboard() {
+  useQuery({ queryKey: ['baseline'], queryFn: getBaseline, staleTime: Infinity,
+    onSuccess: (rows) =&gt; useStore.getState().applyMany(rows) });
+  useTelemetryIngest();
+  const ids = useStore((s) =&gt; Object.keys(s.byId));  <span class="cmt">// only changes when the set of ids changes</span>
+  return { ids };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const Tile = memo(function Tile({ id }: { id: string }) {
+  const t = useStore((s) =&gt; s.byId[id]);            <span class="cmt">// subscribe to ONE id → one tile re-renders</span>
+  if (!t) return &lt;View style={styles.tile}&gt;&lt;Text style={styles.dim}&gt;{id} — waiting…&lt;/Text&gt;&lt;/View&gt;;
+  return (
+    &lt;View style={styles.tile}&gt;
+      &lt;Text style={styles.tileId}&gt;{id}&lt;/Text&gt;
+      &lt;Text style={styles.metric}&gt;{Math.round(t.battery)}%&lt;/Text&gt;
+      &lt;Text style={styles.sub}&gt;{Math.round(t.speed)} mph&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});
+
+function Dashboard() {
+  const { ids } = useDashboard();
+  return (
+    &lt;FlatList
+      data={ids}
+      numColumns={2}
+      keyExtractor={(id) =&gt; id}
+      contentContainerStyle={styles.grid}
+      renderItem={({ item }) =&gt; &lt;Tile id={item} /&gt;}
+    /&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;Dashboard /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  grid: { padding: 8 },
+  tile: { flex: 1, margin: 6, padding: 16, borderRadius: 12, backgroundColor: '#f0f3f7', minHeight: 96 },
+  tileId: { fontSize: 12, color: '#57606a', marginBottom: 4 },
+  metric: { fontSize: 30, fontWeight: '700', color: '#1f2328' },
+  sub: { fontSize: 14, color: '#57606a', marginTop: 2 },
+  dim: { color: '#8b949e' },
+});</code></pre>
+    <p class="note"><strong>Ready (don&apos;t retype):</strong> store + <code>applyMany</code> · ref buffer + 5Hz flush · per-id selector tile · UI + styles · QueryClient wiring · mock socket + baseline. <strong>Deepen as time allows:</strong> <code>useTelemetrySocket</code> (mock emitter → real <code>useWebSocket</code> + Zod validate) · split <code>applyMany</code> back into <code>applyPatch</code> if asked · backpressure under load. The screen shows live-updating tiles from minute 1 regardless.</p>
+
+    <!-- ============ EXTENSIONS ============ -->
+    <h2 id="extensions">Extensions</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>Backpressure / bursty source</td><td>The buffer already coalesces to last-per-id per flush. If the producer outruns even that, cap the buffer and drop the oldest entries, or widen <code>FLUSH_MS</code> adaptively when batch size spikes.</td></tr>
+        <tr><td>Shed load under pressure</td><td>Drop low-priority signals first: keep <code>battery</code>/<code>speed</code> at 5Hz, throttle non-critical fields to 1Hz (or skip them) so the important metrics never starve.</td></tr>
+        <tr><td>Many tiles at scale</td><td>Swap <code>FlatList</code> for <code>FlashList</code> (view recycling, not mount/unmount per row) so a grid of hundreds of tiles scrolls without per-row remount cost; per-id selectors keep updates isolated.</td></tr>
+        <tr><td>Rich per-tile visuals</td><td>Render the gauge with Skia (or a Reanimated worklet) so the animation runs on the UI thread and a smooth needle does not add JS-thread render work per frame.</td></tr>
+        <tr><td>Avoid over-rendering on object identity</td><td>Use a shallow equality selector (<code>useStore(sel, shallow)</code>) when a tile reads more than one field, so a patch that leaves the read fields unchanged does not re-render the tile.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>

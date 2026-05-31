@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Infinite Feed + Search — Composite Build</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Infinite Feed</h1>
+    <ul>
+      <li><a class="group">Overview</a></li>
+      <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#plan">60-min build — core vs stub</a></li>
+      <li><a href="#seams">Given helpers</a></li>
+
+      <li><a class="group">Foundation</a></li>
+      <li><a href="#types">A · Types</a></li>
+      <li><a href="#infinite-query">B · useInfiniteQuery</a></li>
+
+      <li><a class="group">Wire it up</a></li>
+      <li><a href="#list">C · List + onEndReached</a></li>
+      <li><a href="#refresh">D · Pull-to-refresh</a></li>
+      <li><a href="#search">E · Debounced search</a></li>
+
+      <li><a class="group">Mechanisms</a></li>
+      <li><a href="#debounce">useDebounced</a></li>
+
+      <li><a class="group">Assembled</a></li>
+      <li><a href="#use-feed">Full useFeed</a></li>
+      <li><a href="#mock">Mock layer (renders)</a></li>
+      <li><a href="#scaffold">Fast-start scaffold</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Infinite Feed + Search — Composite Build</h1>
+    <div class="doc-sub">Progressive, block-by-block: cursor-paginated infinite list + pull-to-refresh + debounced race-safe search, all driven by one query.</div>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <h2 id="architecture">Architecture &amp; build order</h2>
+    <p class="note">One <code>useInfiniteQuery</code> is the list source. Three controls drive it: scroll fetches the next page, pull-to-refresh refetches, and the search term becomes part of the <code>queryKey</code> — so React Query caches per-term and aborts the in-flight request when the key changes.</p>
+<pre><code>useInfiniteQuery  ['items', debouncedSearch]   ← the list source
+   ▲              ▲                ▲
+   │              │                │
+onEndReached      pull-to-refresh  search box
+fetchNextPage     refetch          → debounced term in the queryKey
+(cursor pages)    (RefreshControl) (new key → cache + abort old, signal)
+
+data.pages.flatMap(p =&gt; p.items)   → flat array the FlatList renders</code></pre>
+    <p class="note">Build order — keep something runnable at every step: <strong>types → query → list → refresh → search → harden.</strong> Each step below leaves a working app.</p>
+
+    <!-- ============ PLAN ============ -->
+    <h2 id="plan">60-min build — core vs stub</h2>
+    <p class="note">Build the core inline; leave deeper concerns as stubs you flesh only if time permits. Runnable at every step; protect the last 10 min for Q&amp;A.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Build inline</th><th>mins</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Core (must)</strong></td><td>types · mock <code>getItems</code> · <code>useInfiniteQuery</code> · <code>FlatList</code> + <code>onEndReached</code> + footer spinner</td><td>0–25</td></tr>
+        <tr><td><strong>Depth</strong></td><td>pull-to-refresh · debounced search in the <code>queryKey</code> · <code>placeholderData</code></td><td>25–42</td></tr>
+        <tr><td><strong>If time / verbal</strong></td><td>abort via <code>signal</code> · empty/error states · <code>maintainVisibleContentPosition</code> · FlashList</td><td>42–50</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Stub-first: write the signature + a minimal body, say "I would flesh this," fill only if time allows.</p>
+<pre><code><span class="cmt">// MVP: server filters. Enhance (if time): thread `signal` so a new keystroke aborts the in-flight request.</span>
+async function getItems(cursor: string | null, q: string): Promise&lt;Page&gt; {
+  const r = await fetch(`${API_URL}/items?cursor=${cursor ?? ''}&amp;q=${q}`);
+  return (await r.json()) as Page;             <span class="cmt">// ← validate + abort upgrade lands here</span>
+}
+
+<span class="cmt">// MVP: filter the term immediately. Enhance (if time): debounce so we key/fetch once per pause, not per keystroke.</span>
+function useDebounced&lt;T&gt;(value: T): T {
+  return value;                                <span class="cmt">// ← the 300ms debounce upgrade lands here</span>
+}</code></pre>
+    <p class="note"><strong>Say the upgrade out loud even if you do not type it:</strong> "filtering on each keystroke works for the demo; in production I would debounce the term and thread <code>signal</code> so a fast typer does not fire a request per character and stale responses cannot land out of order." That earns the depth credit without burning the clock.</p>
+
+    <!-- ============ SEAMS ============ -->
+    <h2 id="seams">Given helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+<span class="cmt">// Cursor pagination: pass the previous page nextCursor; null = first page.</span>
+<span class="cmt">// `signal` lets React Query abort this fetch when the queryKey changes.</span>
+async function getItems(
+  cursor: string | null,
+  q: string,
+  signal?: AbortSignal,
+): Promise&lt;Page&gt; {
+  const url = `${API_URL}/items?limit=20&amp;cursor=${cursor ?? ''}&amp;q=${encodeURIComponent(q)}`;
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return PageSchema.parse(await r.json());        <span class="cmt">// validate at the boundary</span>
+}</code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types"><span class="step">A</span>Types / data model</h2>
+    <p class="note">A <code>Page</code> carries its slice of <code>items</code> plus the <code>nextCursor</code> to fetch the following page — <code>null</code> means "no more." The cursor (not an offset) is what makes paging stable while new items arrive at the head.</p>
+<pre><code>import { z } from 'zod';
+
+const ItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+});
+
+const PageSchema = z.object({
+  items: z.array(ItemSchema),
+  nextCursor: z.string().nullable(),    <span class="cmt">// null → last page</span>
+});
+
+type Item = z.infer&lt;typeof ItemSchema&gt;;
+type Page = z.infer&lt;typeof PageSchema&gt;;</code></pre>
+
+    <!-- ============ INFINITE QUERY ============ -->
+    <h2 id="infinite-query"><span class="step">B</span>useInfiniteQuery — the spine</h2>
+    <p class="note">The whole feature hangs off this one hook. <code>queryKey</code> includes the debounced search so each term is cached and switching terms cancels the old fetch. <code>getNextPageParam</code> reads the cursor off the last page; <code>flatMap</code> flattens pages into one array for the list.</p>
+<pre><code>const {
+  data, fetchNextPage, hasNextPage, isFetchingNextPage,
+  isRefetching, refetch, status,
+} = useInfiniteQuery&lt;Page, Error&gt;({
+  queryKey: ['items', debouncedSearch],                 <span class="cmt">// ◀ term is part of the key</span>
+  queryFn: ({ pageParam, signal }) =&gt;
+    getItems(pageParam as string | null, debouncedSearch, signal),
+  initialPageParam: null,                               <span class="cmt">// first page: no cursor</span>
+  getNextPageParam: (last) =&gt; last.nextCursor,           <span class="cmt">// null ends pagination</span>
+});
+
+<span class="cmt">// pages → one flat array the list renders</span>
+const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];</code></pre>
+    <p class="note">Because the term lives in the key, React Query keeps a <strong>separate cached page-stack per term</strong> and aborts the previous term&rsquo;s in-flight fetch (via the threaded <code>signal</code>) the instant the key changes.</p>
+
+    <!-- ============ LIST ============ -->
+    <h2 id="list"><span class="step">C</span>List — onEndReached paging</h2>
+    <p class="note">Render the flat <code>items</code>. <code>onEndReached</code> asks for the next page, guarded so it fires once per page, not on every scroll tick. A footer spinner shows while the next page loads. Row is memoized; <code>keyExtractor</code> is stable.</p>
+<pre><code>const Row = memo(function Row({ item }: { item: Item }) {
+  return (
+    &lt;View style={styles.row}&gt;
+      &lt;Text style={styles.title}&gt;{item.title}&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});
+
+&lt;FlatList
+  data={items}
+  keyExtractor={(it) =&gt; it.id}                    <span class="cmt">// stable identity</span>
+  renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+  onEndReachedThreshold={0.5}                     <span class="cmt">// fetch at half a screen from the end</span>
+  onEndReached={() =&gt; {
+    if (hasNextPage &amp;&amp; !isFetchingNextPage) {       <span class="cmt">// guard: one page at a time</span>
+      void fetchNextPage();
+    }
+  }}
+  ListFooterComponent={
+    isFetchingNextPage ? &lt;ActivityIndicator style={{ margin: 16 }} /&gt; : null
+  }
+/&gt;</code></pre>
+    <p class="note">The guard matters: without <code>!isFetchingNextPage</code>, a momentum scroll fires <code>onEndReached</code> repeatedly and stacks duplicate page requests.</p>
+
+    <!-- ============ REFRESH ============ -->
+    <h2 id="refresh"><span class="step">D</span>Pull-to-refresh</h2>
+    <p class="note">A <code>RefreshControl</code> wired to <code>refetch</code>. <code>refetch</code> re-runs the query from the first page; <code>isRefetching</code> drives the spinner. This refetches the active term only — it does not reset the search.</p>
+<pre><code>&lt;FlatList
+  data={items}
+  <span class="cmt">// ...keyExtractor / renderItem / onEndReached as above...</span>
+  refreshControl={
+    &lt;RefreshControl
+      refreshing={isRefetching}                    <span class="cmt">// spinner while refetching</span>
+      onRefresh={() =&gt; void refetch()}              <span class="cmt">// re-run from page 1</span>
+    /&gt;
+  }
+/&gt;</code></pre>
+    <p class="note"><code>refetch</code> refetches every loaded page for the current key by default, so the list does not collapse to a single page after a pull.</p>
+
+    <!-- ============ SEARCH ============ -->
+    <h2 id="search"><span class="step">E</span>Debounced search</h2>
+    <p class="note">A controlled <code>TextInput</code> holds the raw term; <code>useDebounced</code> derives the settled term that feeds the key. <code>enabled</code> skips empty/short queries; <code>placeholderData</code> keeps the previous results painted while the new term loads, so the list does not flash empty.</p>
+<pre><code>const [search, setSearch] = useState('');
+const debouncedSearch = useDebounced(search, 300);     <span class="cmt">// settle 300ms after typing stops</span>
+
+const query = useInfiniteQuery&lt;Page, Error&gt;({
+  queryKey: ['items', debouncedSearch],
+  queryFn: ({ pageParam, signal }) =&gt;
+    getItems(pageParam as string | null, debouncedSearch, signal),
+  initialPageParam: null,
+  getNextPageParam: (last) =&gt; last.nextCursor,
+  enabled: debouncedSearch.length === 0 || debouncedSearch.length &gt;= 2,  <span class="cmt">// skip 1-char noise</span>
+  placeholderData: (prev) =&gt; prev,                     <span class="cmt">// keep old results while new term loads</span>
+});
+
+<span class="cmt">// the input drives `search`; `debouncedSearch` drives the key</span>
+&lt;TextInput value={search} onChangeText={setSearch} placeholder="Search…" /&gt;</code></pre>
+    <p class="note">Three things cooperate: <strong>debounce</strong> cuts requests to one per pause, the <strong>key</strong> caches per-term and cancels the prior fetch via <code>signal</code>, and <strong>placeholderData</strong> hides the loading flash. Together that is a race-safe search-as-you-type.</p>
+
+    <!-- ============ DEBOUNCE ============ -->
+    <h2 id="debounce"><span class="step">mechanism</span>useDebounced (generic)</h2>
+    <p class="note">A reusable hook: returns the input value only after it stops changing for <code>delay</code> ms. Each change clears the prior timer, so only the last value in a burst survives. Knows nothing about search — any rapidly-changing value can use it.</p>
+<pre><code>function useDebounced&lt;T&gt;(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() =&gt; {
+    const id = setTimeout(() =&gt; setDebounced(value), delay);
+    return () =&gt; clearTimeout(id);     <span class="cmt">// new keystroke cancels the pending update</span>
+  }, [value, delay]);
+
+  return debounced;
+}</code></pre>
+    <p class="note">Pairing this with the <code>queryKey</code> is what makes it race-safe: the key only changes once per settled value, and React Query aborts the previous term&rsquo;s request when it does.</p>
+
+    <!-- ============ FULL USEFEED ============ -->
+    <h2 id="use-feed"><span class="step">assembled</span>Full useFeed</h2>
+    <p class="note">All five blocks in one hook: debounced term → keyed infinite query → flattened items + the paging/refresh controls the screen needs.</p>
+<pre><code>function useFeed() {
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 300);
+
+  const {
+    data, fetchNextPage, hasNextPage, isFetchingNextPage,
+    isRefetching, refetch, status,
+  } = useInfiniteQuery&lt;Page, Error&gt;({
+    queryKey: ['items', debouncedSearch],
+    queryFn: ({ pageParam, signal }) =&gt;
+      getItems(pageParam as string | null, debouncedSearch, signal),
+    initialPageParam: null,
+    getNextPageParam: (last) =&gt; last.nextCursor,
+    enabled: debouncedSearch.length === 0 || debouncedSearch.length &gt;= 2,
+    placeholderData: (prev) =&gt; prev,
+  });
+
+  const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];
+
+  const loadMore = () =&gt; {
+    if (hasNextPage &amp;&amp; !isFetchingNextPage) void fetchNextPage();
+  };
+
+  return {
+    items, search, setSearch, status,
+    loadMore, isFetchingNextPage,
+    refetch, isRefetching,
+  };
+}</code></pre>
+
+    <!-- ============ MOCK ============ -->
+    <h2 id="mock">Mock layer — so the list shows up</h2>
+    <p class="note">Mock the backend so the list renders without a server, then swap for the real <code>getItems</code> in prod. A paginated mock source lets you see it scroll, page, and filter end-to-end before any backend exists.</p>
+<pre><code><span class="cmt">// 200 rows to scroll through</span>
+const ALL: Item[] = Array.from({ length: 200 }, (_, i) =&gt; ({
+  id: String(i),
+  title: `Item ${i}`,
+}));
+
+const PAGE_SIZE = 20;
+
+<span class="cmt">// Drop-in for getItems: filters by `q`, slices a page, returns the next cursor.</span>
+async function getItems(cursor: string | null, q: string): Promise&lt;Page&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));            <span class="cmt">// simulate latency</span>
+
+  const filtered = q
+    ? ALL.filter((it) =&gt; it.title.toLowerCase().includes(q.toLowerCase()))
+    : ALL;
+
+  const start = cursor ? Number(cursor) : 0;               <span class="cmt">// cursor = index into filtered set</span>
+  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const next = start + PAGE_SIZE;
+
+  return {
+    items: slice,
+    nextCursor: next &lt; filtered.length ? String(next) : null,  <span class="cmt">// null → no more pages</span>
+  };
+}</code></pre>
+    <p class="note">With this defined, the list paints the first 20 rows, loads 20 more each time you near the bottom, and re-pages from a filtered set the moment the debounced term changes. Swap mock <code>getItems</code> for the real fetch (one function) for prod.</p>
+
+    <!-- ============ SCAFFOLD ============ -->
+    <h2 id="scaffold">Fast-start scaffold — minute 1 paste</h2>
+    <p class="note">One complete, runnable file: UI + styles ready, <code>getItems</code> mocked over a paginated source, <code>useDebounced</code> real, the infinite query wired. Paste it → the list scrolls + pages + filters immediately on mock data → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, memo } from 'react';
+import {
+  View, Text, TextInput, FlatList, ActivityIndicator,
+  RefreshControl, SafeAreaView, StyleSheet,
+} from 'react-native';
+import {
+  QueryClient, QueryClientProvider, useInfiniteQuery,
+} from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Item = { id: string; title: string };
+type Page = { items: Item[]; nextCursor: string | null };
+
+<span class="cmt">// ── mock backend (swap for real) ──</span>
+const PAGE_SIZE = 20;
+const ALL: Item[] = Array.from({ length: 200 }, (_, i) =&gt; ({ id: String(i), title: `Item ${i}` }));
+
+<span class="cmt">// (prod) add a `signal?: AbortSignal` param and thread it into fetch so key changes abort.</span>
+async function getItems(cursor: string | null, q: string): Promise&lt;Page&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  const filtered = q ? ALL.filter((it) =&gt; it.title.toLowerCase().includes(q.toLowerCase())) : ALL;
+  const start = cursor ? Number(cursor) : 0;
+  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const next = start + PAGE_SIZE;
+  return { items: slice, nextCursor: next &lt; filtered.length ? String(next) : null };
+}
+
+<span class="cmt">// ── mechanism: debounce ──</span>
+function useDebounced&lt;T&gt;(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() =&gt; {
+    const id = setTimeout(() =&gt; setDebounced(value), delay);
+    return () =&gt; clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+<span class="cmt">// ── useFeed: the integration ──</span>
+function useFeed() {
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 300);
+
+  const {
+    data, fetchNextPage, hasNextPage, isFetchingNextPage,
+    isRefetching, refetch, status,
+  } = useInfiniteQuery&lt;Page, Error&gt;({
+    queryKey: ['items', debouncedSearch],
+    queryFn: ({ pageParam }) =&gt; getItems(pageParam as string | null, debouncedSearch),
+    initialPageParam: null,
+    getNextPageParam: (last) =&gt; last.nextCursor,
+    enabled: debouncedSearch.length === 0 || debouncedSearch.length &gt;= 2,
+    placeholderData: (prev) =&gt; prev,
+  });
+
+  const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];
+  const loadMore = () =&gt; { if (hasNextPage &amp;&amp; !isFetchingNextPage) void fetchNextPage(); };
+
+  return { items, search, setSearch, status, loadMore, isFetchingNextPage, refetch, isRefetching };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const Row = memo(function Row({ item }: { item: Item }) {
+  return (
+    &lt;View style={styles.row}&gt;
+      &lt;Text style={styles.title}&gt;{item.title}&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});
+
+function FeedScreen() {
+  const {
+    items, search, setSearch, status,
+    loadMore, isFetchingNextPage, refetch, isRefetching,
+  } = useFeed();
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search…"
+        style={styles.search}
+        autoCorrect={false}
+        autoCapitalize="none"
+      /&gt;
+      {status === 'pending' ? (
+        &lt;ActivityIndicator style={{ flex: 1 }} /&gt;
+      ) : (
+        &lt;FlatList
+          data={items}
+          keyExtractor={(it) =&gt; it.id}
+          renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+          onEndReachedThreshold={0.5}
+          onEndReached={loadMore}
+          refreshControl={
+            &lt;RefreshControl refreshing={isRefetching} onRefresh={() =&gt; void refetch()} /&gt;
+          }
+          ListFooterComponent={isFetchingNextPage ? &lt;ActivityIndicator style={{ margin: 16 }} /&gt; : null}
+          ListEmptyComponent={&lt;Text style={styles.empty}&gt;No results&lt;/Text&gt;}
+        /&gt;
+      )}
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;FeedScreen /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  search: { margin: 12, height: 40, borderWidth: 1, borderColor: '#ccc', borderRadius: 10, paddingHorizontal: 14 },
+  row: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  title: { fontSize: 15 },
+  empty: { textAlign: 'center', color: '#888', marginTop: 32 },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock paginated <code>getItems</code> · <code>useDebounced</code> · the infinite query + list wiring · UI + styles · QueryClient. <strong>Deepen as time allows:</strong> thread <code>signal</code> into <code>getItems</code> (abort on key change) · Zod validation at the boundary · error state · <code>maintainVisibleContentPosition</code>. The list scrolls, pages, and filters from minute 1 regardless.</p>
+
+    <!-- ============ EXTENSIONS ============ -->
+    <h2 id="extensions">Extensions</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>New items arrive at the head</td><td><code>maintainVisibleContentPosition</code> on the <code>FlatList</code> so prepending items does not jump the scroll position out from under the reader.</td></tr>
+        <tr><td>Empty / error / loading states</td><td><code>status === 'pending'</code> → full spinner; <code>status === 'error'</code> → message + retry button; <code>ListEmptyComponent</code> for a search that matched nothing.</td></tr>
+        <tr><td>Very long lists / jank</td><td>Swap <code>FlatList</code> for <code>FlashList</code> (view recycling instead of mount/unmount); give it an <code>estimatedItemSize</code>. Same data + <code>onEndReached</code> contract.</td></tr>
+        <tr><td>Tap a row → detail screen</td><td>Prefetch on press: <code>queryClient.prefetchQuery(['item', id], …)</code> in <code>onPressIn</code> so the detail screen paints from cache by the time navigation settles.</td></tr>
+        <tr><td>Abort stale searches</td><td>Already free once <code>signal</code> is threaded into <code>getItems</code>: changing the debounced term changes the key, and React Query cancels the previous term&rsquo;s in-flight fetch.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>

@@ -90,6 +90,26 @@
     <h2>Real-time Chat — Composite Build</h2>
     <p>Progressive block-by-block build: fetch history + optimistic send + live WebSocket + offline queue, converging on one React Query cache. Includes the useWebSocket &amp; outbox mechanisms, the useChatSocket wrapper, dedup/reconcile, and the assembled screen.</p>
   </a>
+
+  <a class="card" href="./telemetry-tile.html">
+    <h2>Live Telemetry Tile — Composite Build</h2>
+    <p>Dashboard of tiles updating live over WebSocket: a Zustand byId store as source of truth, a ~5Hz coalescing buffer, per-tile selector so only the changed tile re-renders, REST baseline + ts-guard.</p>
+  </a>
+
+  <a class="card" href="./stories-viewer.html">
+    <h2>Stories Viewer — Composite Build</h2>
+    <p>Instagram-style stories: horizontal tiles, fullscreen viewer, a setTimeout auto-advance state machine, progress segments, tap zones, hold-to-pause, AppState handling.</p>
+  </a>
+
+  <a class="card" href="./field-wizard.html">
+    <h2>Multi-step Form Wizard — Composite Build</h2>
+    <p>Site-assessment wizard: one accumulated form + step index, per-step validation gating Next, progress, review, and an offline-safe submit via the outbox.</p>
+  </a>
+
+  <a class="card" href="./infinite-feed.html">
+    <h2>Infinite Feed + Search — Composite Build</h2>
+    <p>Cursor-paginated useInfiniteQuery, pull-to-refresh, and a debounced race-safe search that swaps the queryKey (AbortSignal + placeholderData).</p>
+  </a>
 </div>
 
 </body>

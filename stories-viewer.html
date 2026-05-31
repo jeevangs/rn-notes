@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stories Viewer — Composite Build</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Stories Viewer</h1>
+    <ul>
+      <li><a class="group">Overview</a></li>
+      <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#plan">60-min build — core vs stub</a></li>
+      <li><a href="#seams">Given helpers</a></li>
+
+      <li><a class="group">Foundation</a></li>
+      <li><a href="#types">A · Types</a></li>
+      <li><a href="#tiles">B · Tile row</a></li>
+
+      <li><a class="group">Viewer</a></li>
+      <li><a href="#viewer">C · Modal viewer</a></li>
+      <li><a href="#advance">D · Auto-advance</a></li>
+      <li><a href="#progress">E · Progress + tap zones</a></li>
+
+      <li><a class="group">Mechanism</a></li>
+      <li><a href="#timer">Auto-advance timer</a></li>
+
+      <li><a class="group">Assembled</a></li>
+      <li><a href="#use-stories">useStories</a></li>
+      <li><a href="#screen">Stories screen</a></li>
+      <li><a href="#mock">Mock layer (renders)</a></li>
+      <li><a href="#scaffold">Fast-start scaffold</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Stories Viewer — Composite Build</h1>
+    <div class="doc-sub">Progressive, block-by-block: a horizontal tile row opens a fullscreen modal that plays N image segments per story, auto-advancing on a timer with progress bars and tap-to-navigate.</div>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <h2 id="architecture">Architecture &amp; build order</h2>
+    <p class="note">The viewer is a small <strong>state machine</strong> driven by two indices: which story, and which segment within it. A single <code>setTimeout</code> advances the segment after its duration; the progress bars are a pure render of <code>segmentIndex</code>. The timer is the one piece that must be cleaned up on every segment change — that is the stale-closure trap.</p>
+<pre><code>stories: Story[]            ← data (row of tiles)
+   │ tap a tile
+   ▼
+viewer state machine   { storyIndex, segmentIndex, paused }
+   │                          ▲
+   │ setTimeout(duration)     │ progress bars derived from segmentIndex
+   ▼                          │
+goNext ──► segmentIndex + 1 ──┤  (last segment? → next story → close)
+goPrev ──► segmentIndex - 1 ──┘
+   ▲
+tap-left / tap-right zones · hold-to-pause · AppState pause</code></pre>
+    <p class="note">Build order — keep something runnable at every step: <strong>tiles → open modal → show one image → auto-advance → progress + taps → harden.</strong> Each step below leaves a working app.</p>
+
+    <!-- ============ PLAN ============ -->
+    <h2 id="plan">60-min build — core vs stub</h2>
+    <p class="note">Build the core inline; leave the polish as stubs you flesh only if time permits. Runnable at every step; protect the last 10 min for Q&amp;A.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Build inline</th><th>mins</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Core (must)</strong></td><td>types · mock layer · tile row · <code>Modal</code> + <code>Image</code> of current segment · <code>goNext</code>/<code>goPrev</code></td><td>0–25</td></tr>
+        <tr><td><strong>Depth</strong></td><td>auto-advance timer (with cleanup) · segmented progress bars · left/right tap zones</td><td>25–42</td></tr>
+        <tr><td><strong>If time / verbal</strong></td><td>hold-to-pause · <code>AppState</code> pause · prefetch next segment · seen-state</td><td>42–50</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Stub-first: write the signature + a minimal body, say "I would flesh this," fill only if time allows.</p>
+<pre><code><span class="cmt">// MVP: jump to next segment, clamp at the end. Enhance (if time): roll over to the next story, then close.</span>
+function goNext(): void {
+  setSegmentIndex((i) =&gt; i + 1);          <span class="cmt">// ← story-rollover upgrade lands here</span>
+}
+
+<span class="cmt">// MVP: fixed duration for every segment. Enhance (if time): read segment.duration per image.</span>
+function durationFor(_segment: Segment): number {
+  return 5000;                            <span class="cmt">// ← per-segment timing upgrade lands here</span>
+}</code></pre>
+    <p class="note"><strong>Say the upgrade out loud even if you do not type it:</strong> "clamping works for the demo; in production <code>goNext</code> on the last segment advances to the next story, and only closes after the last story." That earns the depth credit without burning the clock.</p>
+
+    <!-- ============ SEAMS ============ -->
+    <h2 id="seams">Given helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+async function getStories(): Promise&lt;Story[]&gt; {
+  const r = await fetch(`${API_URL}/stories`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return StoriesSchema.parse(await r.json());       <span class="cmt">// validate at the boundary</span>
+}
+
+const DEFAULT_DURATION = 5000;   <span class="cmt">// ms per segment when the payload omits one</span></code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types"><span class="step">A</span>Types / data model</h2>
+    <p class="note">A <code>Story</code> is an author plus an ordered list of <code>segments</code>. Each segment carries its own image <code>uri</code> and a <code>duration</code> in ms — different segments can linger for different lengths. <code>duration</code> is optional in the payload; the viewer falls back to <code>DEFAULT_DURATION</code>.</p>
+<pre><code>import { z } from 'zod';
+
+const SegmentSchema = z.object({
+  uri: z.string(),                       <span class="cmt">// image url for this frame</span>
+  duration: z.number().optional(),       <span class="cmt">// ms on screen → drives the timer</span>
+});
+
+const StorySchema = z.object({
+  id: z.string(),
+  authorName: z.string(),
+  avatarUri: z.string(),
+  segments: z.array(SegmentSchema),      <span class="cmt">// N frames, played in order</span>
+});
+const StoriesSchema = z.array(StorySchema);
+
+type Segment = z.infer&lt;typeof SegmentSchema&gt;;
+type Story = z.infer&lt;typeof StorySchema&gt;;</code></pre>
+
+    <!-- ============ TILES ============ -->
+    <h2 id="tiles"><span class="step">B</span>Tile row — memoized, horizontal</h2>
+    <p class="note">A horizontal <code>FlatList</code> of memoized <code>StoryTile</code> (avatar ring + name). <code>onPress</code> opens the viewer at that story. Memo + a stable <code>onPress</code> keep tiles from re-rendering as the viewer state churns.</p>
+<pre><code>const StoryTile = memo(function StoryTile({
+  story, onPress,
+}: { story: Story; onPress: (id: string) =&gt; void }) {
+  return (
+    &lt;Pressable style={styles.tile} onPress={() =&gt; onPress(story.id)}&gt;
+      &lt;View style={styles.ring}&gt;
+        &lt;Image source={{ uri: story.avatarUri }} style={styles.avatar} /&gt;
+      &lt;/View&gt;
+      &lt;Text numberOfLines={1} style={styles.tileName}&gt;{story.authorName}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+function StoryRow({ stories, onOpen }: { stories: Story[]; onOpen: (id: string) =&gt; void }) {
+  return (
+    &lt;FlatList
+      data={stories}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyExtractor={(s) =&gt; s.id}
+      renderItem={({ item }) =&gt; &lt;StoryTile story={item} onPress={onOpen} /&gt;}
+    /&gt;
+  );
+}</code></pre>
+
+    <!-- ============ VIEWER ============ -->
+    <h2 id="viewer"><span class="step">C</span>Modal viewer — current segment</h2>
+    <p class="note">A fullscreen <code>Modal</code> shows the current segment image. The viewer is opened by a story id; resolve the story and clamp <code>segmentIndex</code>. Render-only here — navigation and the timer come in D/E.</p>
+<pre><code>function StoryViewer({
+  stories, openId, onClose,
+}: { stories: Story[]; openId: string | null; onClose: () =&gt; void }) {
+  const storyIndex = stories.findIndex((s) =&gt; s.id === openId);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+
+  const story = storyIndex &gt;= 0 ? stories[storyIndex] : null;
+  const segment = story?.segments[segmentIndex];
+
+  return (
+    &lt;Modal visible={openId !== null} animationType="fade" onRequestClose={onClose}&gt;
+      &lt;View style={styles.viewer}&gt;
+        {segment &amp;&amp; (
+          &lt;Image source={{ uri: segment.uri }} style={styles.full} resizeMode="cover" /&gt;
+        )}
+        &lt;Pressable style={styles.closeBtn} onPress={onClose}&gt;
+          &lt;Text style={styles.closeTxt}&gt;✕&lt;/Text&gt;
+        &lt;/Pressable&gt;
+      &lt;/View&gt;
+    &lt;/Modal&gt;
+  );
+}</code></pre>
+    <p class="note">Reset <code>segmentIndex</code> to <code>0</code> whenever <code>openId</code> changes so a freshly opened story starts at its first frame — handled by an effect in the assembled hook below.</p>
+
+    <!-- ============ ADVANCE ============ -->
+    <h2 id="advance"><span class="step">D</span>Auto-advance — goNext / goPrev</h2>
+    <p class="note">Three transitions drive the machine. <code>goNext</code> rolls past the last segment into the next story, then closes after the last story. <code>goPrev</code> steps back, clamped at the first segment. Both reset the timer by virtue of changing <code>segmentIndex</code> (see the timer mechanism).</p>
+<pre><code>const goNext = () =&gt; {
+  if (!story) return;
+  if (segmentIndex + 1 &lt; story.segments.length) {
+    setSegmentIndex((i) =&gt; i + 1);                 <span class="cmt">// next frame, same story</span>
+  } else if (storyIndex + 1 &lt; stories.length) {
+    setStoryIndex((i) =&gt; i + 1);                   <span class="cmt">// roll into next story…</span>
+    setSegmentIndex(0);                            <span class="cmt">// …at its first frame</span>
+  } else {
+    onClose();                                     <span class="cmt">// end of the last story → dismiss</span>
+  }
+};
+
+const goPrev = () =&gt; {
+  if (segmentIndex &gt; 0) {
+    setSegmentIndex((i) =&gt; i - 1);                 <span class="cmt">// previous frame</span>
+  } else if (storyIndex &gt; 0) {
+    const prev = stories[storyIndex - 1];
+    setStoryIndex((i) =&gt; i - 1);
+    setSegmentIndex(prev.segments.length - 1);     <span class="cmt">// last frame of previous story</span>
+  }
+  <span class="cmt">// else: already at the very first frame → no-op</span>
+};</code></pre>
+
+    <!-- ============ PROGRESS ============ -->
+    <h2 id="progress"><span class="step">E</span>Progress bars + tap zones</h2>
+    <p class="note">One bar per segment, derived purely from <code>segmentIndex</code>: bars before the current are full, the current one fills over the segment duration, later bars are empty. Two full-height <code>Pressable</code> zones (left third = prev, right two-thirds = next) sit over the image. <code>AppState</code> pauses when backgrounded.</p>
+<pre><code>function ProgressBars({
+  count, index, progress,
+}: { count: number; index: number; progress: number }) {
+  return (
+    &lt;View style={styles.bars}&gt;
+      {Array.from({ length: count }, (_, i) =&gt; {
+        const fill = i &lt; index ? 1 : i === index ? progress : 0;
+        return (
+          &lt;View key={i} style={styles.barTrack}&gt;
+            &lt;View style={[styles.barFill, { flex: fill }]} /&gt;
+            &lt;View style={{ flex: 1 - fill }} /&gt;
+          &lt;/View&gt;
+        );
+      })}
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// tap zones, layered over the image inside the viewer:</span>
+&lt;Pressable style={styles.zoneLeft} onPress={goPrev} /&gt;
+&lt;Pressable style={styles.zoneRight} onPress={goNext} /&gt;</code></pre>
+    <p class="note"><code>Array.from({ length: count }, ...)</code> gives a fresh bar array each render with no mutation; <code>flex: fill</code> vs <code>flex: 1 - fill</code> renders the partial fill without measuring pixel widths.</p>
+
+    <!-- ============ TIMER ============ -->
+    <h2 id="timer"><span class="step">mechanism</span>Auto-advance timer</h2>
+    <p class="note">The heart of the viewer. A <code>useEffect</code> keyed on <code>(storyIndex, segmentIndex, paused)</code> arms a single <code>setTimeout(goNext, duration)</code>; its cleanup <code>clearTimeout</code> fires on every segment change or unmount. <strong>The stale-closure trap:</strong> if you forget the cleanup, old timers survive and fire <code>goNext</code> multiple times — segments skip. Keep <code>goNext</code> in a ref so the effect does not re-arm on every render.</p>
+<pre><code>const goNextRef = useRef(goNext);
+goNextRef.current = goNext;                          <span class="cmt">// latest closure, every render</span>
+
+useEffect(() =&gt; {
+  if (openId === null || paused || !segment) return; <span class="cmt">// no timer while closed / paused</span>
+
+  const duration = segment.duration ?? DEFAULT_DURATION;
+  const id = setTimeout(() =&gt; goNextRef.current(), duration);
+
+  return () =&gt; clearTimeout(id);                      <span class="cmt">// ◀ MUST clean up — kills the stale timer</span>
+}, [openId, storyIndex, segmentIndex, paused, segment]);</code></pre>
+    <p class="note"><strong>Pause / resume that respects elapsed time:</strong> store when the segment started and how much time was left; on pause, bank the remaining; on resume, re-arm for the banked remainder instead of the full duration — otherwise a pause restarts the frame.</p>
+<pre><code>const startedAtRef = useRef(0);
+const remainingRef = useRef(DEFAULT_DURATION);
+
+useEffect(() =&gt; {
+  if (openId === null || !segment) return;
+  const full = segment.duration ?? DEFAULT_DURATION;
+
+  if (paused) {
+    const elapsed = Date.now() - startedAtRef.current;
+    remainingRef.current = Math.max(0, remainingRef.current - elapsed);  <span class="cmt">// bank what is left</span>
+    return;                                          <span class="cmt">// no new timer while paused</span>
+  }
+
+  <span class="cmt">// (re)start: full duration on a fresh segment, banked remainder on resume</span>
+  const wait = remainingRef.current &gt; 0 &amp;&amp; remainingRef.current &lt; full
+    ? remainingRef.current
+    : full;
+  startedAtRef.current = Date.now();
+  remainingRef.current = full;                        <span class="cmt">// reset budget for the next segment</span>
+
+  const id = setTimeout(() =&gt; goNextRef.current(), wait);
+  return () =&gt; clearTimeout(id);
+}, [openId, storyIndex, segmentIndex, paused, segment]);</code></pre>
+
+    <!-- ============ USE-STORIES ============ -->
+    <h2 id="use-stories"><span class="step">assembled</span>useStories — the integration</h2>
+    <p class="note">One hook owns the whole machine: open/close, the two indices, paused, the elapsing <code>progress</code> for the bars, the timer with cleanup, and the navigation transitions. The screen below is a thin render of what it returns.</p>
+<pre><code>function useStories(stories: Story[]) {
+  const [openId, setOpenId] = useState&lt;string | null&gt;(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState(0);       <span class="cmt">// 0..1 fill of the current bar</span>
+
+  const story = openId !== null ? stories[storyIndex] : null;
+  const segment = story?.segments[segmentIndex];
+
+  const open = (id: string) =&gt; {
+    const idx = stories.findIndex((s) =&gt; s.id === id);
+    if (idx &lt; 0) return;
+    setStoryIndex(idx);
+    setSegmentIndex(0);
+    setProgress(0);
+    setOpenId(id);
+  };
+  const close = () =&gt; { setOpenId(null); setPaused(false); };
+
+  const goNext = () =&gt; {
+    if (!story) return;
+    if (segmentIndex + 1 &lt; story.segments.length) { setSegmentIndex((i) =&gt; i + 1); }
+    else if (storyIndex + 1 &lt; stories.length) { setStoryIndex((i) =&gt; i + 1); setSegmentIndex(0); }
+    else { close(); }
+    setProgress(0);
+  };
+  const goPrev = () =&gt; {
+    if (segmentIndex &gt; 0) { setSegmentIndex((i) =&gt; i - 1); }
+    else if (storyIndex &gt; 0) {
+      const prev = stories[storyIndex - 1];
+      setStoryIndex((i) =&gt; i - 1); setSegmentIndex(prev.segments.length - 1);
+    }
+    setProgress(0);
+  };
+
+  const goNextRef = useRef(goNext);
+  goNextRef.current = goNext;
+
+  <span class="cmt">// drive both the auto-advance AND the progress fill from one rAF-ish interval</span>
+  useEffect(() =&gt; {
+    if (openId === null || paused || !segment) return;
+    const duration = segment.duration ?? DEFAULT_DURATION;
+    const start = Date.now();
+    setProgress(0);
+
+    const tick = setInterval(() =&gt; {
+      const p = Math.min(1, (Date.now() - start) / duration);
+      setProgress(p);
+      if (p &gt;= 1) goNextRef.current();                <span class="cmt">// advance when the bar is full</span>
+    }, 50);
+
+    return () =&gt; clearInterval(tick);                  <span class="cmt">// ◀ cleanup on segment / pause change</span>
+  }, [openId, storyIndex, segmentIndex, paused, segment]);
+
+  <span class="cmt">// pause when the app is backgrounded</span>
+  useEffect(() =&gt; {
+    const sub = AppState.addEventListener('change', (s) =&gt;
+      setPaused(s !== 'active'));
+    return () =&gt; sub.remove();
+  }, []);
+
+  return {
+    openId, story, storyIndex, segmentIndex, segment, progress,
+    open, close, goNext, goPrev,
+    pause: () =&gt; setPaused(true),
+    resume: () =&gt; setPaused(false),
+  };
+}</code></pre>
+
+    <!-- ============ SCREEN ============ -->
+    <h2 id="screen"><span class="step">assembled</span>Stories screen (UI)</h2>
+<pre><code>function StoriesScreen({ stories }: { stories: Story[] }) {
+  const v = useStories(stories);
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }} edges={['top']}&gt;
+      &lt;StoryRow stories={stories} onOpen={v.open} /&gt;
+
+      &lt;Modal visible={v.openId !== null} animationType="fade" onRequestClose={v.close}&gt;
+        &lt;View style={styles.viewer}&gt;
+          {v.segment &amp;&amp; (
+            &lt;Image source={{ uri: v.segment.uri }} style={styles.full} resizeMode="cover" /&gt;
+          )}
+
+          {v.story &amp;&amp; (
+            &lt;ProgressBars
+              count={v.story.segments.length}
+              index={v.segmentIndex}
+              progress={v.progress}
+            /&gt;
+          )}
+
+          {v.story &amp;&amp; (
+            &lt;View style={styles.header}&gt;
+              &lt;Image source={{ uri: v.story.avatarUri }} style={styles.headerAvatar} /&gt;
+              &lt;Text style={styles.headerName}&gt;{v.story.authorName}&lt;/Text&gt;
+              &lt;Pressable style={styles.closeBtn} onPress={v.close}&gt;
+                &lt;Text style={styles.closeTxt}&gt;✕&lt;/Text&gt;
+              &lt;/Pressable&gt;
+            &lt;/View&gt;
+          )}
+
+          <span class="cmt">// tap zones + hold-to-pause over the image</span>
+          &lt;Pressable
+            style={styles.zoneLeft}
+            onPress={v.goPrev}
+            onPressIn={v.pause}
+            onPressOut={v.resume}
+          /&gt;
+          &lt;Pressable
+            style={styles.zoneRight}
+            onPress={v.goNext}
+            onPressIn={v.pause}
+            onPressOut={v.resume}
+          /&gt;
+        &lt;/View&gt;
+      &lt;/Modal&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}</code></pre>
+    <p class="note">Tap left/right navigates; press-and-hold pauses (banking elapsed time) and releases to resume. The progress bars track the live <code>progress</code> value, and the timer advances the segment when a bar fills.</p>
+
+    <!-- ============ MOCK ============ -->
+    <h2 id="mock">Mock layer — so the screen shows up</h2>
+    <p class="note">Mock the backend so the UI renders without a server, then swap for the real <code>getStories</code> in prod. Strong move in the round: "I will mock the data so we can see it working." Placeholder image services give real pixels to scroll.</p>
+<pre><code>const PH = (seed: string, w = 1080, h = 1920) =&gt;
+  `https://picsum.photos/seed/${seed}/${w}/${h}`;     <span class="cmt">// deterministic placeholder image</span>
+
+const MOCK_STORIES: Story[] = [
+  {
+    id: 's1', authorName: 'Ava', avatarUri: PH('ava', 100, 100),
+    segments: [
+      { uri: PH('ava-1'), duration: 4000 },
+      { uri: PH('ava-2'), duration: 4000 },
+      { uri: PH('ava-3'), duration: 4000 },
+    ],
+  },
+  {
+    id: 's2', authorName: 'Ben', avatarUri: PH('ben', 100, 100),
+    segments: [
+      { uri: PH('ben-1'), duration: 3000 },
+      { uri: PH('ben-2'), duration: 3000 },
+    ],
+  },
+  {
+    id: 's3', authorName: 'Cleo', avatarUri: PH('cleo', 100, 100),
+    segments: [{ uri: PH('cleo-1'), duration: 5000 }],
+  },
+];
+
+async function getStories(): Promise&lt;Story[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));        <span class="cmt">// simulate latency</span>
+  return MOCK_STORIES;
+}</code></pre>
+    <p class="note">With these defined, the tile row renders three authors; tapping a tile opens the modal, the first image shows, the progress bar fills over its duration, and segments auto-advance — rolling into the next story and closing at the end. Swap the mock <code>getStories</code> for the real fetch (one line) for prod.</p>
+
+    <!-- ============ SCAFFOLD ============ -->
+    <h2 id="scaffold">Fast-start scaffold — minute 1 paste</h2>
+    <p class="note">One complete, runnable file: tile row + modal viewer + working auto-advance timer + progress bars, all on mock stories with placeholder images. Paste it → tapping a tile opens the viewer and segments auto-advance from minute 1 → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, useRef, memo } from 'react';
+import {
+  View, Text, Image, Pressable, FlatList, Modal,
+  ActivityIndicator, SafeAreaView, AppState, StyleSheet,
+} from 'react-native';
+
+<span class="cmt">// ── types ──</span>
+type Segment = { uri: string; duration?: number };
+type Story = { id: string; authorName: string; avatarUri: string; segments: Segment[] };
+
+const DEFAULT_DURATION = 5000;
+
+<span class="cmt">// ── mock backend (swap for real getStories) ──</span>
+const PH = (seed: string, w = 1080, h = 1920) =&gt; `https://picsum.photos/seed/${seed}/${w}/${h}`;
+const MOCK_STORIES: Story[] = [
+  { id: 's1', authorName: 'Ava', avatarUri: PH('ava', 100, 100),
+    segments: [{ uri: PH('ava-1'), duration: 4000 }, { uri: PH('ava-2'), duration: 4000 }, { uri: PH('ava-3'), duration: 4000 }] },
+  { id: 's2', authorName: 'Ben', avatarUri: PH('ben', 100, 100),
+    segments: [{ uri: PH('ben-1'), duration: 3000 }, { uri: PH('ben-2'), duration: 3000 }] },
+  { id: 's3', authorName: 'Cleo', avatarUri: PH('cleo', 100, 100),
+    segments: [{ uri: PH('cleo-1'), duration: 5000 }] },
+];
+async function getStories(): Promise&lt;Story[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  return MOCK_STORIES;
+}
+
+<span class="cmt">// ── B · tile row ──</span>
+const StoryTile = memo(function StoryTile({ story, onPress }: { story: Story; onPress: (id: string) =&gt; void }) {
+  return (
+    &lt;Pressable style={styles.tile} onPress={() =&gt; onPress(story.id)}&gt;
+      &lt;View style={styles.ring}&gt;&lt;Image source={{ uri: story.avatarUri }} style={styles.avatar} /&gt;&lt;/View&gt;
+      &lt;Text numberOfLines={1} style={styles.tileName}&gt;{story.authorName}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+<span class="cmt">// ── E · progress bars (derived from segmentIndex) ──</span>
+function ProgressBars({ count, index, progress }: { count: number; index: number; progress: number }) {
+  return (
+    &lt;View style={styles.bars}&gt;
+      {Array.from({ length: count }, (_, i) =&gt; {
+        const fill = i &lt; index ? 1 : i === index ? progress : 0;
+        return (
+          &lt;View key={i} style={styles.barTrack}&gt;
+            &lt;View style={[styles.barFill, { flex: fill }]} /&gt;
+            &lt;View style={{ flex: 1 - fill }} /&gt;
+          &lt;/View&gt;
+        );
+      })}
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// ── useStories: open/close + indices + timer + progress ──</span>
+function useStories(stories: Story[]) {
+  const [openId, setOpenId] = useState&lt;string | null&gt;(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const story = openId !== null ? stories[storyIndex] : null;
+  const segment = story?.segments[segmentIndex];
+
+  const open = (id: string) =&gt; {
+    const idx = stories.findIndex((s) =&gt; s.id === id);
+    if (idx &lt; 0) return;
+    setStoryIndex(idx); setSegmentIndex(0); setProgress(0); setOpenId(id);
+  };
+  const close = () =&gt; { setOpenId(null); setPaused(false); };
+
+  const goNext = () =&gt; {
+    if (!story) return;
+    if (segmentIndex + 1 &lt; story.segments.length) setSegmentIndex((i) =&gt; i + 1);
+    else if (storyIndex + 1 &lt; stories.length) { setStoryIndex((i) =&gt; i + 1); setSegmentIndex(0); }
+    else close();
+    setProgress(0);
+  };
+  const goPrev = () =&gt; {
+    if (segmentIndex &gt; 0) setSegmentIndex((i) =&gt; i - 1);
+    else if (storyIndex &gt; 0) { const p = stories[storyIndex - 1]; setStoryIndex((i) =&gt; i - 1); setSegmentIndex(p.segments.length - 1); }
+    setProgress(0);
+  };
+
+  const goNextRef = useRef(goNext);
+  goNextRef.current = goNext;
+
+  useEffect(() =&gt; {
+    if (openId === null || paused || !segment) return;
+    const duration = segment.duration ?? DEFAULT_DURATION;
+    const start = Date.now();
+    setProgress(0);
+    const tick = setInterval(() =&gt; {
+      const p = Math.min(1, (Date.now() - start) / duration);
+      setProgress(p);
+      if (p &gt;= 1) goNextRef.current();
+    }, 50);
+    return () =&gt; clearInterval(tick);                  <span class="cmt">// ◀ cleanup kills the stale timer</span>
+  }, [openId, storyIndex, segmentIndex, paused, segment]);
+
+  useEffect(() =&gt; {
+    const sub = AppState.addEventListener('change', (s) =&gt; setPaused(s !== 'active'));
+    return () =&gt; sub.remove();
+  }, []);
+
+  return {
+    openId, story, storyIndex, segmentIndex, segment, progress,
+    open, close, goNext, goPrev,
+    pause: () =&gt; setPaused(true), resume: () =&gt; setPaused(false),
+  };
+}
+
+<span class="cmt">// ── screen: tile row + modal viewer ──</span>
+function StoriesScreen({ stories }: { stories: Story[] }) {
+  const v = useStories(stories);
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;FlatList
+        data={stories}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(s) =&gt; s.id}
+        renderItem={({ item }) =&gt; &lt;StoryTile story={item} onPress={v.open} /&gt;}
+        style={{ flexGrow: 0 }}
+      /&gt;
+
+      &lt;Modal visible={v.openId !== null} animationType="fade" onRequestClose={v.close}&gt;
+        &lt;View style={styles.viewer}&gt;
+          {v.segment &amp;&amp; &lt;Image source={{ uri: v.segment.uri }} style={styles.full} resizeMode="cover" /&gt;}
+          {v.story &amp;&amp; &lt;ProgressBars count={v.story.segments.length} index={v.segmentIndex} progress={v.progress} /&gt;}
+          {v.story &amp;&amp; (
+            &lt;View style={styles.header}&gt;
+              &lt;Image source={{ uri: v.story.avatarUri }} style={styles.headerAvatar} /&gt;
+              &lt;Text style={styles.headerName}&gt;{v.story.authorName}&lt;/Text&gt;
+              &lt;Pressable style={styles.closeBtn} onPress={v.close}&gt;&lt;Text style={styles.closeTxt}&gt;✕&lt;/Text&gt;&lt;/Pressable&gt;
+            &lt;/View&gt;
+          )}
+          &lt;Pressable style={styles.zoneLeft} onPress={v.goPrev} onPressIn={v.pause} onPressOut={v.resume} /&gt;
+          &lt;Pressable style={styles.zoneRight} onPress={v.goNext} onPressIn={v.pause} onPressOut={v.resume} /&gt;
+        &lt;/View&gt;
+      &lt;/Modal&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+export default function App() {
+  const [stories, setStories] = useState&lt;Story[] | null&gt;(null);
+  useEffect(() =&gt; { void getStories().then(setStories); }, []);
+  if (!stories) return &lt;ActivityIndicator style={{ flex: 1 }} /&gt;;
+  return &lt;StoriesScreen stories={stories} /&gt;;
+}
+
+const styles = StyleSheet.create({
+  tile: { width: 72, alignItems: 'center', marginHorizontal: 6, marginVertical: 10 },
+  ring: { width: 64, height: 64, borderRadius: 32, padding: 3, borderWidth: 2, borderColor: '#e1306c' },
+  avatar: { width: '100%', height: '100%', borderRadius: 29 },
+  tileName: { fontSize: 12, marginTop: 4, maxWidth: 72 },
+
+  viewer: { flex: 1, backgroundColor: '#000' },
+  full: { ...StyleSheet.absoluteFillObject },
+  bars: { flexDirection: 'row', position: 'absolute', top: 12, left: 8, right: 8, gap: 4 },
+  barTrack: { flex: 1, flexDirection: 'row', height: 3, borderRadius: 2, backgroundColor: '#ffffff55', overflow: 'hidden' },
+  barFill: { backgroundColor: '#fff' },
+
+  header: { position: 'absolute', top: 26, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerAvatar: { width: 32, height: 32, borderRadius: 16 },
+  headerName: { color: '#fff', fontWeight: '600', flex: 1 },
+  closeBtn: { padding: 8 },
+  closeTxt: { color: '#fff', fontSize: 18 },
+
+  zoneLeft: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '33%' },
+  zoneRight: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '67%' },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock data + <code>getStories</code> · tile row · modal viewer · progress bars · timer with cleanup · styles. <strong>Deepen as time allows:</strong> per-segment <code>duration</code> already wired · pause that <em>banks</em> elapsed time (the scaffold restarts the segment on resume — upgrade to the banked-remainder timer from the mechanism section) · <code>Image.prefetch</code> of the next segment · seen-state. The viewer opens and auto-advances from minute 1 regardless.</p>
+
+    <!-- ============ EXTENSIONS ============ -->
+    <h2 id="extensions">Extensions</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>Hold-to-pause that feels native</td><td>Replace the <code>onPressIn</code>/<code>onPressOut</code> pause with a Reanimated <code>Gesture.LongPress</code> (or a <code>Pan</code> for swipe), driving <code>paused</code> on the UI thread so the gesture never drops a frame.</td></tr>
+        <tr><td>Skip already-seen stories</td><td>Persist a <code>Set&lt;storyId&gt;</code> (MMKV); on open, mark seen and dim the tile ring; optionally jump the row to the first unseen story.</td></tr>
+        <tr><td>No flash between segments</td><td><code>Image.prefetch(nextSegment.uri)</code> when the current segment mounts so the next frame is warm in cache before <code>goNext</code> fires.</td></tr>
+        <tr><td>Video segments</td><td>Add a <code>type</code> to <code>Segment</code>; render <code>expo-av</code> / <code>react-native-video</code> for video and drive the timer off the clip duration (or <code>onEnd</code>) instead of a fixed <code>setTimeout</code>.</td></tr>
+        <tr><td>Swipe-down to dismiss</td><td>A Reanimated <code>Pan</code> gesture translating the viewer down; release past a threshold calls <code>close()</code>, otherwise springs back — interpolate opacity with the drag for the fade.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>
