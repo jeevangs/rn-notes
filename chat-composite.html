@@ -134,6 +134,7 @@
       <li><a href="#use-chat">Full useChat</a></li>
       <li><a href="#screen">Chat screen</a></li>
       <li><a href="#mock">Mock layer (renders)</a></li>
+      <li><a href="#scaffold">Fast-start scaffold</a></li>
       <li><a href="#extensions">Extensions</a></li>
     </ul>
   </aside>
@@ -502,6 +503,155 @@ function useChatSocket(roomId: string, key: readonly unknown[]) {
   }, [roomId]);
 }</code></pre>
     <p class="note">With these defined, the assembled <code>ChatScreen</code> renders the three seed messages, shows a new incoming message every 4s, and your sends appear instantly. Swap the mock <code>useChatSocket</code> for the real <code>useWebSocket</code>-based one (one line) for prod.</p>
+
+    <!-- ============ SCAFFOLD ============ -->
+    <h2 id="scaffold">Fast-start scaffold — minute 1 paste</h2>
+    <p class="note">One complete, runnable file: UI + styles ready, <code>getMessages</code> mocked, mechanisms as signatures/minimal stubs, mock socket so live updates show. Paste it → the screen renders immediately on mock data → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, memo } from 'react';
+import {
+  View, Text, TextInput, Pressable, FlatList, ActivityIndicator,
+  SafeAreaView, KeyboardAvoidingView, Platform, StyleSheet,
+} from 'react-native';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Message = {
+  id: string; clientId?: string; roomId: string;
+  senderId: string; text: string; ts: number;
+  status?: 'pending' | 'sent' | 'failed';
+};
+
+<span class="cmt">// ── mock backend (swap for real) ──</span>
+const currentUserId = 'me';
+const API_URL = 'https://example.com/api';
+const MOCK: Message[] = [
+  { id: '1', roomId: 'r1', senderId: 'them', text: 'Hey, you around?', ts: 1 },
+  { id: '2', roomId: 'r1', senderId: 'me',   text: 'Yep, on it', ts: 2, status: 'sent' },
+];
+async function getMessages(_roomId: string): Promise&lt;Message[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 200));
+  return MOCK;
+}
+
+<span class="cmt">// ── mechanisms ──</span>
+<span class="cmt">// (prod) your reconnect + backoff hook — signature only here:</span>
+declare function useWebSocket&lt;T&gt;(url: string, onMessage: (m: T) =&gt; void): { status: string };
+
+<span class="cmt">// (prod) offline outbox — minimal direct POST so the demo runs:</span>
+function enqueue(job: { idempotencyKey: string; url: string; method: 'POST'; body: unknown }): void {
+  void fetch(job.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(job.body) });
+}
+
+<span class="cmt">// ── stub: deepen if time (append → dedup by clientId) ──</span>
+function mergeMessage(list: Message[], incoming: Message): Message[] {
+  return [...list, incoming];
+}
+
+<span class="cmt">// (prod) real wrapper uses useWebSocket:</span>
+<span class="cmt">//   function useChatSocket(roomId, key) {</span>
+<span class="cmt">//     const qc = useQueryClient();</span>
+<span class="cmt">//     useWebSocket&lt;unknown&gt;(wsUrl(roomId), (raw) =&gt; qc.setQueryData(key, (o=[]) =&gt; mergeMessage(o, raw as Message)));</span>
+<span class="cmt">//   }</span>
+<span class="cmt">// (demo) mock socket — emits every 4s so live updates show:</span>
+function useChatSocket(roomId: string, key: readonly unknown[]) {
+  const qc = useQueryClient();
+  useEffect(() =&gt; {
+    let n = 0;
+    const id = setInterval(() =&gt; {
+      qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt;
+        mergeMessage(old, { id: `live-${n}`, roomId, senderId: 'them', text: `live ${n++}`, ts: Date.now() }));
+    }, 4000);
+    return () =&gt; clearInterval(id);
+  }, [roomId]);
+}
+
+<span class="cmt">// ── useChat: the integration ──</span>
+function useChat(roomId: string) {
+  const qc = useQueryClient();
+  const key = ['messages', roomId] as const;
+
+  const { data: messages = [], status } = useQuery({
+    queryKey: key,
+    queryFn: () =&gt; getMessages(roomId),
+    select: (m) =&gt; [...m].sort((a, b) =&gt; b.ts - a.ts),
+  });
+
+  useChatSocket(roomId, key);
+
+  const send = (text: string) =&gt; {
+    const clientId = `c-${Date.now()}`;
+    qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; [
+      ...old,
+      { id: `temp-${clientId}`, clientId, roomId, senderId: currentUserId, text, ts: Date.now(), status: 'pending' },
+    ]);
+    enqueue({ idempotencyKey: clientId, url: `${API_URL}/rooms/${roomId}/messages`, method: 'POST', body: { clientId, text } });
+  };
+
+  return { messages, send, status };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const MessageBubble = memo(function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
+  return (
+    &lt;View style={[styles.row, mine ? styles.right : styles.left]}&gt;
+      &lt;View style={[styles.bubble, mine ? styles.mine : styles.them]}&gt;
+        &lt;Text style={mine ? styles.mineText : undefined}&gt;{message.text}&lt;/Text&gt;
+        {mine &amp;&amp; message.status === 'pending' &amp;&amp; &lt;Text style={styles.meta}&gt;•••&lt;/Text&gt;}
+        {mine &amp;&amp; message.status === 'sent' &amp;&amp; &lt;Text style={styles.meta}&gt;✓&lt;/Text&gt;}
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+});
+
+function ChatScreen({ roomId }: { roomId: string }) {
+  const { messages, send, status } = useChat(roomId);
+  const [draft, setDraft] = useState('');
+  if (status === 'pending') return &lt;ActivityIndicator style={{ flex: 1 }} /&gt;;
+
+  const onSend = () =&gt; { const t = draft.trim(); if (!t) return; send(t); setDraft(''); };
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}&gt;
+        &lt;FlatList
+          data={messages}
+          inverted
+          keyExtractor={(m) =&gt; m.clientId ?? m.id}
+          renderItem={({ item }) =&gt; &lt;MessageBubble message={item} mine={item.senderId === currentUserId} /&gt;}
+        /&gt;
+        &lt;View style={styles.composer}&gt;
+          &lt;TextInput value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.input} multiline /&gt;
+          &lt;Pressable onPress={onSend} disabled={!draft.trim()} style={styles.sendBtn}&gt;&lt;Text style={styles.sendText}&gt;Send&lt;/Text&gt;&lt;/Pressable&gt;
+        &lt;/View&gt;
+      &lt;/KeyboardAvoidingView&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;ChatScreen roomId="r1" /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { paddingHorizontal: 12, marginVertical: 2 },
+  left: { alignItems: 'flex-start' },
+  right: { alignItems: 'flex-end' },
+  bubble: { maxWidth: '78%', padding: 10, borderRadius: 16 },
+  them: { backgroundColor: '#e9e9eb' },
+  mine: { backgroundColor: '#0084ff' },
+  mineText: { color: '#fff' },
+  meta: { fontSize: 11, color: '#ffffff88', marginTop: 2 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', padding: 8, gap: 8, borderTopWidth: 1, borderTopColor: '#eee' },
+  input: { flex: 1, minHeight: 40, maxHeight: 100, borderWidth: 1, borderColor: '#ccc', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  sendBtn: { backgroundColor: '#0084ff', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 18 },
+  sendText: { color: '#fff', fontWeight: '600' },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock data + <code>getMessages</code> · UI + styles · QueryClient wiring. <strong>Deepen as time allows:</strong> <code>mergeMessage</code> (append → dedup by <code>clientId</code>) · <code>enqueue</code> (direct POST → offline outbox) · <code>useChatSocket</code> (mock emitter → real <code>useWebSocket</code>). The screen shows up from minute 1 regardless.</p>
 
     <!-- ============ EXTENSIONS ============ -->
     <h2 id="extensions">Extensions</h2>
