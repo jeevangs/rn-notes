@@ -114,6 +114,7 @@
     <ul>
       <li><a class="group">Overview</a></li>
       <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#plan">60-min build — core vs stub</a></li>
       <li><a href="#seams">Given helpers</a></li>
 
       <li><a class="group">Foundation</a></li>
@@ -132,6 +133,7 @@
       <li><a class="group">Assembled</a></li>
       <li><a href="#use-chat">Full useChat</a></li>
       <li><a href="#screen">Chat screen</a></li>
+      <li><a href="#mock">Mock layer (renders)</a></li>
       <li><a href="#extensions">Extensions</a></li>
     </ul>
   </aside>
@@ -152,6 +154,33 @@ initial fetch   │          your sends
             live WS push
         (onMessage → setQueryData)</code></pre>
     <p class="note">Build order — keep something runnable at every step: <strong>render → load → send → live → reconcile → harden.</strong> Each step below leaves a working app.</p>
+
+    <!-- ============ PLAN ============ -->
+    <h2 id="plan">60-min build — core vs stub</h2>
+    <p class="note">Build the core inline; leave deeper methods as stubs you flesh only if time permits. Runnable at every step; protect the last 10 min for Q&amp;A.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Build inline</th><th>mins</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Core (must)</strong></td><td>types · mock layer · <code>useQuery</code> history · optimistic <code>send</code> · static screen renders</td><td>0–25</td></tr>
+        <tr><td><strong>Depth</strong></td><td>WS merge (live) · dedup reconcile</td><td>25–42</td></tr>
+        <tr><td><strong>If time / verbal</strong></td><td>offline outbox · persistence · pagination · failure → retry</td><td>42–50</td></tr>
+      </tbody>
+    </table>
+    <p class="note">Stub-first: write the signature + a minimal body, say "I would flesh this," fill only if time allows.</p>
+<pre><code><span class="cmt">// MVP: append only. Enhance (if time): dedup by id + reconcile my echo by clientId.</span>
+function mergeMessage(list: Message[], incoming: Message): Message[] {
+  return [...list, incoming];                 <span class="cmt">// ← the dedup upgrade lands here</span>
+}
+
+<span class="cmt">// MVP: POST directly. Enhance (if time): enqueue + drain on reconnect (offline outbox).</span>
+function submit(roomId: string, body: unknown): void {
+  void fetch(`${API_URL}/rooms/${roomId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}</code></pre>
+    <p class="note"><strong>Say the upgrade out loud even if you do not type it:</strong> "append works for the demo; in the room I would dedup by <code>clientId</code> so my optimistic message and its socket echo do not double." That earns the depth credit without burning the clock.</p>
 
     <!-- ============ SEAMS ============ -->
     <h2 id="seams">Given helpers</h2>
@@ -440,6 +469,39 @@ function ChatScreen({ roomId }: { roomId: string }) {
     &lt;/SafeAreaView&gt;
   );
 }</code></pre>
+
+    <!-- ============ MOCK ============ -->
+    <h2 id="mock">Mock layer — so the screen shows up</h2>
+    <p class="note">Mock the backend so the UI renders without a server, then swap for the real <code>getMessages</code> / socket in prod. Strong move in the round: "I will mock the data so we can see it working."</p>
+<pre><code>const currentUserId = 'me';
+
+const MOCK_MESSAGES: Message[] = [
+  { id: '1', roomId: 'r1', senderId: 'them', text: 'Hey, you around?', ts: 1 },
+  { id: '2', roomId: 'r1', senderId: 'me',   text: 'Yep, on it', ts: 2, status: 'sent' },
+  { id: '3', roomId: 'r1', senderId: 'them', text: 'Pushing the build now', ts: 3 },
+];
+
+async function getMessages(_roomId: string): Promise&lt;Message[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));     <span class="cmt">// simulate latency</span>
+  return MOCK_MESSAGES;
+}
+
+<span class="cmt">// Drop-in for useChatSocket: same signature, fake emitter.</span>
+<span class="cmt">// Pushes a "them" message every 4s into the SAME cache via the same merge.</span>
+function useChatSocket(roomId: string, key: readonly unknown[]) {
+  const qc = useQueryClient();
+  useEffect(() =&gt; {
+    let n = 0;
+    const id = setInterval(() =&gt; {
+      const incoming: Message = {
+        id: `live-${n}`, roomId, senderId: 'them', text: `live message ${n++}`, ts: Date.now(),
+      };
+      qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; mergeMessage(old, incoming));
+    }, 4000);
+    return () =&gt; clearInterval(id);
+  }, [roomId]);
+}</code></pre>
+    <p class="note">With these defined, the assembled <code>ChatScreen</code> renders the three seed messages, shows a new incoming message every 4s, and your sends appear instantly. Swap the mock <code>useChatSocket</code> for the real <code>useWebSocket</code>-based one (one line) for prod.</p>
 
     <!-- ============ EXTENSIONS ============ -->
     <h2 id="extensions">Extensions</h2>
