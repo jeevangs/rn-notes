@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Build Scaffolds — minute-1 pastes</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+
+  @media print {
+    .layout { display: block; }
+    .sidebar { display: none; }
+    .main { max-width: none; padding: 0; }
+    pre, pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+    pre { border: 1px solid #ccc; }
+    h2, h3 { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+    html, body { font-size: 12px; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Build Scaffolds</h1>
+    <ul>
+      <li><a class="group">Minute-1 pastes</a></li>
+      <li><a href="#chat">Chat feed</a></li>
+      <li><a href="#telemetry">Live telemetry tile</a></li>
+      <li><a href="#stories">Stories viewer</a></li>
+      <li><a href="#wizard">Form wizard</a></li>
+      <li><a href="#feed">Infinite feed + search</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Build Scaffolds — minute-1 pastes</h1>
+    <div class="doc-sub">One runnable scaffold per build prompt — mocks so it renders, mechanisms stubbed. Paste, see it work, then deepen.</div>
+
+    <h2 id="chat">Chat feed</h2>
+<p class="note">One complete, runnable file: UI + styles ready, <code>getMessages</code> mocked, mechanisms as signatures/minimal stubs, mock socket so live updates show. Paste it → the screen renders immediately on mock data → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, memo } from 'react';
+import {
+  View, Text, TextInput, Pressable, FlatList, ActivityIndicator,
+  SafeAreaView, KeyboardAvoidingView, Platform, StyleSheet,
+} from 'react-native';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Message = {
+  id: string; clientId?: string; roomId: string;
+  senderId: string; text: string; ts: number;
+  status?: 'pending' | 'sent' | 'failed';
+};
+
+<span class="cmt">// ── mock backend (swap for real) ──</span>
+const currentUserId = 'me';
+const API_URL = 'https://example.com/api';
+const MOCK: Message[] = [
+  { id: '1', roomId: 'r1', senderId: 'them', text: 'Hey, you around?', ts: 1 },
+  { id: '2', roomId: 'r1', senderId: 'me',   text: 'Yep, on it', ts: 2, status: 'sent' },
+];
+async function getMessages(_roomId: string): Promise&lt;Message[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 200));
+  return MOCK;
+}
+
+<span class="cmt">// ── mechanisms ──</span>
+<span class="cmt">// (prod) your reconnect + backoff hook — signature only here:</span>
+declare function useWebSocket&lt;T&gt;(url: string, onMessage: (m: T) =&gt; void): { status: string };
+
+<span class="cmt">// (prod) offline outbox — minimal direct POST so the demo runs:</span>
+function enqueue(job: { idempotencyKey: string; url: string; method: 'POST'; body: unknown }): void {
+  void fetch(job.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(job.body) });
+}
+
+<span class="cmt">// ── stub: deepen if time (append → dedup by clientId) ──</span>
+function mergeMessage(list: Message[], incoming: Message): Message[] {
+  return [...list, incoming];
+}
+
+<span class="cmt">// (prod) real wrapper uses useWebSocket:</span>
+<span class="cmt">//   function useChatSocket(roomId, key) {</span>
+<span class="cmt">//     const qc = useQueryClient();</span>
+<span class="cmt">//     useWebSocket&lt;unknown&gt;(wsUrl(roomId), (raw) =&gt; qc.setQueryData(key, (o=[]) =&gt; mergeMessage(o, raw as Message)));</span>
+<span class="cmt">//   }</span>
+<span class="cmt">// (demo) mock socket — emits every 4s so live updates show:</span>
+function useChatSocket(roomId: string, key: readonly unknown[]) {
+  const qc = useQueryClient();
+  useEffect(() =&gt; {
+    let n = 0;
+    const id = setInterval(() =&gt; {
+      qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt;
+        mergeMessage(old, { id: `live-${n}`, roomId, senderId: 'them', text: `live ${n++}`, ts: Date.now() }));
+    }, 4000);
+    return () =&gt; clearInterval(id);
+  }, [roomId]);
+}
+
+<span class="cmt">// ── useChat: the integration ──</span>
+function useChat(roomId: string) {
+  const qc = useQueryClient();
+  const key = ['messages', roomId] as const;
+
+  const { data: messages = [], status } = useQuery({
+    queryKey: key,
+    queryFn: () =&gt; getMessages(roomId),
+    select: (m) =&gt; [...m].sort((a, b) =&gt; b.ts - a.ts),
+  });
+
+  useChatSocket(roomId, key);
+
+  const send = (text: string) =&gt; {
+    const clientId = `c-${Date.now()}`;
+    qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; [
+      ...old,
+      { id: `temp-${clientId}`, clientId, roomId, senderId: currentUserId, text, ts: Date.now(), status: 'pending' },
+    ]);
+    enqueue({ idempotencyKey: clientId, url: `${API_URL}/rooms/${roomId}/messages`, method: 'POST', body: { clientId, text } });
+  };
+
+  return { messages, send, status };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const MessageBubble = memo(function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
+  return (
+    &lt;View style={[styles.row, mine ? styles.right : styles.left]}&gt;
+      &lt;View style={[styles.bubble, mine ? styles.mine : styles.them]}&gt;
+        &lt;Text style={mine ? styles.mineText : undefined}&gt;{message.text}&lt;/Text&gt;
+        {mine &amp;&amp; message.status === 'pending' &amp;&amp; &lt;Text style={styles.meta}&gt;•••&lt;/Text&gt;}
+        {mine &amp;&amp; message.status === 'sent' &amp;&amp; &lt;Text style={styles.meta}&gt;✓&lt;/Text&gt;}
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+});
+
+function ChatScreen({ roomId }: { roomId: string }) {
+  const { messages, send, status } = useChat(roomId);
+  const [draft, setDraft] = useState('');
+  if (status === 'pending') return &lt;ActivityIndicator style={{ flex: 1 }} /&gt;;
+
+  const onSend = () =&gt; { const t = draft.trim(); if (!t) return; send(t); setDraft(''); };
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}&gt;
+        &lt;FlatList
+          data={messages}
+          inverted
+          keyExtractor={(m) =&gt; m.clientId ?? m.id}
+          renderItem={({ item }) =&gt; &lt;MessageBubble message={item} mine={item.senderId === currentUserId} /&gt;}
+        /&gt;
+        &lt;View style={styles.composer}&gt;
+          &lt;TextInput value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.input} multiline /&gt;
+          &lt;Pressable onPress={onSend} disabled={!draft.trim()} style={styles.sendBtn}&gt;&lt;Text style={styles.sendText}&gt;Send&lt;/Text&gt;&lt;/Pressable&gt;
+        &lt;/View&gt;
+      &lt;/KeyboardAvoidingView&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;ChatScreen roomId="r1" /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { paddingHorizontal: 12, marginVertical: 2 },
+  left: { alignItems: 'flex-start' },
+  right: { alignItems: 'flex-end' },
+  bubble: { maxWidth: '78%', padding: 10, borderRadius: 16 },
+  them: { backgroundColor: '#e9e9eb' },
+  mine: { backgroundColor: '#0084ff' },
+  mineText: { color: '#fff' },
+  meta: { fontSize: 11, color: '#ffffff88', marginTop: 2 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', padding: 8, gap: 8, borderTopWidth: 1, borderTopColor: '#eee' },
+  input: { flex: 1, minHeight: 40, maxHeight: 100, borderWidth: 1, borderColor: '#ccc', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  sendBtn: { backgroundColor: '#0084ff', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 18 },
+  sendText: { color: '#fff', fontWeight: '600' },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock data + <code>getMessages</code> · UI + styles · QueryClient wiring. <strong>Deepen as time allows:</strong> <code>mergeMessage</code> (append → dedup by <code>clientId</code>) · <code>enqueue</code> (direct POST → offline outbox) · <code>useChatSocket</code> (mock emitter → real <code>useWebSocket</code>). The screen shows up from minute 1 regardless.</p>
+
+    <h2 id="telemetry">Live telemetry tile</h2>
+<p class="note">One complete, runnable file: store + buffer/flush wired, mock socket so tiles stream, UI + styles ready, baseline mocked. Paste it → the screen shows live-updating tiles immediately → then deepen the marked stubs (real socket, ts-guard hardening, REST baseline).</p>
+<pre><code>import React, { useState, useEffect, useRef, memo } from 'react';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { create } from 'zustand';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Telemetry = { vehicleId: string; battery: number; speed: number; ts: number };
+
+<span class="cmt">// ── config / mock backend (swap for real) ──</span>
+const API_URL = 'https://example.com/api';
+const FLUSH_MS = 200;                          <span class="cmt">// 5Hz</span>
+const MOCK_IDS = ['veh-1', 'veh-2', 'veh-3'];
+
+async function getBaseline(): Promise&lt;Telemetry[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  return MOCK_IDS.map((vehicleId) =&gt; ({ vehicleId, battery: 50 + Math.random() * 50, speed: 0, ts: Date.now() }));
+}
+
+<span class="cmt">// ── store: the source of truth (ts-guarded) ──</span>
+type TelemetryState = {
+  byId: Record&lt;string, Telemetry&gt;;
+  applyMany: (patches: Telemetry[]) =&gt; void;
+};
+const useStore = create&lt;TelemetryState&gt;((set) =&gt; ({
+  byId: {},
+  applyMany: (patches) =&gt; set((s) =&gt; {
+    const next = { ...s.byId };
+    for (const p of patches) {
+      const prev = next[p.vehicleId];
+      if (prev &amp;&amp; prev.ts &gt;= p.ts) continue;     <span class="cmt">// drop stale / out-of-order</span>
+      next[p.vehicleId] = p;
+    }
+    return { byId: next };                       <span class="cmt">// one set() per flush → one render pass</span>
+  }),
+}));
+
+<span class="cmt">// ── mechanisms ──</span>
+<span class="cmt">// (prod) your reconnect + backoff hook — signature only here:</span>
+declare function useWebSocket&lt;T&gt;(url: string, onMessage: (m: T) =&gt; void): { status: string };
+
+<span class="cmt">// (prod) real wrapper validates frames + uses useWebSocket:</span>
+<span class="cmt">//   function useTelemetrySocket(onFrame) {</span>
+<span class="cmt">//     useWebSocket&lt;unknown&gt;('wss://example.com/telemetry', (raw) =&gt; {</span>
+<span class="cmt">//       const p = TelemetrySchema.safeParse(raw); if (p.success) onFrame(p.data);</span>
+<span class="cmt">//     });</span>
+<span class="cmt">//   }</span>
+<span class="cmt">// (demo) mock socket — emits ~30Hz so the 5Hz flush visibly coalesces:</span>
+function useTelemetrySocket(onFrame: (t: Telemetry) =&gt; void) {
+  const onFrameRef = useRef(onFrame);
+  onFrameRef.current = onFrame;
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const vehicleId = MOCK_IDS[Math.floor(Math.random() * MOCK_IDS.length)];
+      onFrameRef.current({ vehicleId, battery: 20 + Math.random() * 80, speed: Math.random() * 80, ts: Date.now() });
+    }, 33);
+    return () =&gt; clearInterval(id);
+  }, []);
+}
+
+<span class="cmt">// ── ingest: coalesce in a ref buffer, flush to the store at 5Hz ──</span>
+function useTelemetryIngest() {
+  const bufferRef = useRef&lt;Record&lt;string, Telemetry&gt;&gt;({});
+  useTelemetrySocket((frame) =&gt; {
+    const prev = bufferRef.current[frame.vehicleId];
+    if (prev &amp;&amp; prev.ts &gt;= frame.ts) return;
+    bufferRef.current[frame.vehicleId] = frame;     <span class="cmt">// non-reactive write → no render</span>
+  });
+  useEffect(() =&gt; {
+    const id = setInterval(() =&gt; {
+      const batch = Object.values(bufferRef.current);
+      if (batch.length === 0) return;
+      bufferRef.current = {};
+      useStore.getState().applyMany(batch);
+    }, FLUSH_MS);
+    return () =&gt; clearInterval(id);
+  }, []);
+}
+
+<span class="cmt">// ── dashboard hook: seed + live ingest + id list ──</span>
+function useDashboard() {
+  useQuery({ queryKey: ['baseline'], queryFn: getBaseline, staleTime: Infinity,
+    onSuccess: (rows) =&gt; useStore.getState().applyMany(rows) });
+  useTelemetryIngest();
+  const ids = useStore((s) =&gt; Object.keys(s.byId));  <span class="cmt">// only changes when the set of ids changes</span>
+  return { ids };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const Tile = memo(function Tile({ id }: { id: string }) {
+  const t = useStore((s) =&gt; s.byId[id]);            <span class="cmt">// subscribe to ONE id → one tile re-renders</span>
+  if (!t) return &lt;View style={styles.tile}&gt;&lt;Text style={styles.dim}&gt;{id} — waiting…&lt;/Text&gt;&lt;/View&gt;;
+  return (
+    &lt;View style={styles.tile}&gt;
+      &lt;Text style={styles.tileId}&gt;{id}&lt;/Text&gt;
+      &lt;Text style={styles.metric}&gt;{Math.round(t.battery)}%&lt;/Text&gt;
+      &lt;Text style={styles.sub}&gt;{Math.round(t.speed)} mph&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});
+
+function Dashboard() {
+  const { ids } = useDashboard();
+  return (
+    &lt;FlatList
+      data={ids}
+      numColumns={2}
+      keyExtractor={(id) =&gt; id}
+      contentContainerStyle={styles.grid}
+      renderItem={({ item }) =&gt; &lt;Tile id={item} /&gt;}
+    /&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;Dashboard /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  grid: { padding: 8 },
+  tile: { flex: 1, margin: 6, padding: 16, borderRadius: 12, backgroundColor: '#f0f3f7', minHeight: 96 },
+  tileId: { fontSize: 12, color: '#57606a', marginBottom: 4 },
+  metric: { fontSize: 30, fontWeight: '700', color: '#1f2328' },
+  sub: { fontSize: 14, color: '#57606a', marginTop: 2 },
+  dim: { color: '#8b949e' },
+});</code></pre>
+    <p class="note"><strong>Ready (don&apos;t retype):</strong> store + <code>applyMany</code> · ref buffer + 5Hz flush · per-id selector tile · UI + styles · QueryClient wiring · mock socket + baseline. <strong>Deepen as time allows:</strong> <code>useTelemetrySocket</code> (mock emitter → real <code>useWebSocket</code> + Zod validate) · split <code>applyMany</code> back into <code>applyPatch</code> if asked · backpressure under load. The screen shows live-updating tiles from minute 1 regardless.</p>
+
+    <h2 id="stories">Stories viewer</h2>
+<p class="note">One complete, runnable file: tile row + modal viewer + working auto-advance timer + progress bars, all on mock stories with placeholder images. Paste it → tapping a tile opens the viewer and segments auto-advance from minute 1 → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, useRef, memo } from 'react';
+import {
+  View, Text, Image, Pressable, FlatList, Modal,
+  ActivityIndicator, SafeAreaView, AppState, StyleSheet,
+} from 'react-native';
+
+<span class="cmt">// ── types ──</span>
+type Segment = { uri: string; duration?: number };
+type Story = { id: string; authorName: string; avatarUri: string; segments: Segment[] };
+
+const DEFAULT_DURATION = 5000;
+
+<span class="cmt">// ── mock backend (swap for real getStories) ──</span>
+const PH = (seed: string, w = 1080, h = 1920) =&gt; `https://picsum.photos/seed/${seed}/${w}/${h}`;
+const MOCK_STORIES: Story[] = [
+  { id: 's1', authorName: 'Ava', avatarUri: PH('ava', 100, 100),
+    segments: [{ uri: PH('ava-1'), duration: 4000 }, { uri: PH('ava-2'), duration: 4000 }, { uri: PH('ava-3'), duration: 4000 }] },
+  { id: 's2', authorName: 'Ben', avatarUri: PH('ben', 100, 100),
+    segments: [{ uri: PH('ben-1'), duration: 3000 }, { uri: PH('ben-2'), duration: 3000 }] },
+  { id: 's3', authorName: 'Cleo', avatarUri: PH('cleo', 100, 100),
+    segments: [{ uri: PH('cleo-1'), duration: 5000 }] },
+];
+async function getStories(): Promise&lt;Story[]&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  return MOCK_STORIES;
+}
+
+<span class="cmt">// ── B · tile row ──</span>
+const StoryTile = memo(function StoryTile({ story, onPress }: { story: Story; onPress: (id: string) =&gt; void }) {
+  return (
+    &lt;Pressable style={styles.tile} onPress={() =&gt; onPress(story.id)}&gt;
+      &lt;View style={styles.ring}&gt;&lt;Image source={{ uri: story.avatarUri }} style={styles.avatar} /&gt;&lt;/View&gt;
+      &lt;Text numberOfLines={1} style={styles.tileName}&gt;{story.authorName}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+<span class="cmt">// ── E · progress bars (derived from segmentIndex) ──</span>
+function ProgressBars({ count, index, progress }: { count: number; index: number; progress: number }) {
+  return (
+    &lt;View style={styles.bars}&gt;
+      {Array.from({ length: count }, (_, i) =&gt; {
+        const fill = i &lt; index ? 1 : i === index ? progress : 0;
+        return (
+          &lt;View key={i} style={styles.barTrack}&gt;
+            &lt;View style={[styles.barFill, { flex: fill }]} /&gt;
+            &lt;View style={{ flex: 1 - fill }} /&gt;
+          &lt;/View&gt;
+        );
+      })}
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// ── useStories: open/close + indices + timer + progress ──</span>
+function useStories(stories: Story[]) {
+  const [openId, setOpenId] = useState&lt;string | null&gt;(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const story = openId !== null ? stories[storyIndex] : null;
+  const segment = story?.segments[segmentIndex];
+
+  const open = (id: string) =&gt; {
+    const idx = stories.findIndex((s) =&gt; s.id === id);
+    if (idx &lt; 0) return;
+    setStoryIndex(idx); setSegmentIndex(0); setProgress(0); setOpenId(id);
+  };
+  const close = () =&gt; { setOpenId(null); setPaused(false); };
+
+  const goNext = () =&gt; {
+    if (!story) return;
+    if (segmentIndex + 1 &lt; story.segments.length) setSegmentIndex((i) =&gt; i + 1);
+    else if (storyIndex + 1 &lt; stories.length) { setStoryIndex((i) =&gt; i + 1); setSegmentIndex(0); }
+    else close();
+    setProgress(0);
+  };
+  const goPrev = () =&gt; {
+    if (segmentIndex &gt; 0) setSegmentIndex((i) =&gt; i - 1);
+    else if (storyIndex &gt; 0) { const p = stories[storyIndex - 1]; setStoryIndex((i) =&gt; i - 1); setSegmentIndex(p.segments.length - 1); }
+    setProgress(0);
+  };
+
+  const goNextRef = useRef(goNext);
+  goNextRef.current = goNext;
+
+  useEffect(() =&gt; {
+    if (openId === null || paused || !segment) return;
+    const duration = segment.duration ?? DEFAULT_DURATION;
+    const start = Date.now();
+    setProgress(0);
+    const tick = setInterval(() =&gt; {
+      const p = Math.min(1, (Date.now() - start) / duration);
+      setProgress(p);
+      if (p &gt;= 1) goNextRef.current();
+    }, 50);
+    return () =&gt; clearInterval(tick);                  <span class="cmt">// ◀ cleanup kills the stale timer</span>
+  }, [openId, storyIndex, segmentIndex, paused, segment]);
+
+  useEffect(() =&gt; {
+    const sub = AppState.addEventListener('change', (s) =&gt; setPaused(s !== 'active'));
+    return () =&gt; sub.remove();
+  }, []);
+
+  return {
+    openId, story, storyIndex, segmentIndex, segment, progress,
+    open, close, goNext, goPrev,
+    pause: () =&gt; setPaused(true), resume: () =&gt; setPaused(false),
+  };
+}
+
+<span class="cmt">// ── screen: tile row + modal viewer ──</span>
+function StoriesScreen({ stories }: { stories: Story[] }) {
+  const v = useStories(stories);
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;FlatList
+        data={stories}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(s) =&gt; s.id}
+        renderItem={({ item }) =&gt; &lt;StoryTile story={item} onPress={v.open} /&gt;}
+        style={{ flexGrow: 0 }}
+      /&gt;
+
+      &lt;Modal visible={v.openId !== null} animationType="fade" onRequestClose={v.close}&gt;
+        &lt;View style={styles.viewer}&gt;
+          {v.segment &amp;&amp; &lt;Image source={{ uri: v.segment.uri }} style={styles.full} resizeMode="cover" /&gt;}
+          {v.story &amp;&amp; &lt;ProgressBars count={v.story.segments.length} index={v.segmentIndex} progress={v.progress} /&gt;}
+          {v.story &amp;&amp; (
+            &lt;View style={styles.header}&gt;
+              &lt;Image source={{ uri: v.story.avatarUri }} style={styles.headerAvatar} /&gt;
+              &lt;Text style={styles.headerName}&gt;{v.story.authorName}&lt;/Text&gt;
+              &lt;Pressable style={styles.closeBtn} onPress={v.close}&gt;&lt;Text style={styles.closeTxt}&gt;✕&lt;/Text&gt;&lt;/Pressable&gt;
+            &lt;/View&gt;
+          )}
+          &lt;Pressable style={styles.zoneLeft} onPress={v.goPrev} onPressIn={v.pause} onPressOut={v.resume} /&gt;
+          &lt;Pressable style={styles.zoneRight} onPress={v.goNext} onPressIn={v.pause} onPressOut={v.resume} /&gt;
+        &lt;/View&gt;
+      &lt;/Modal&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+export default function App() {
+  const [stories, setStories] = useState&lt;Story[] | null&gt;(null);
+  useEffect(() =&gt; { void getStories().then(setStories); }, []);
+  if (!stories) return &lt;ActivityIndicator style={{ flex: 1 }} /&gt;;
+  return &lt;StoriesScreen stories={stories} /&gt;;
+}
+
+const styles = StyleSheet.create({
+  tile: { width: 72, alignItems: 'center', marginHorizontal: 6, marginVertical: 10 },
+  ring: { width: 64, height: 64, borderRadius: 32, padding: 3, borderWidth: 2, borderColor: '#e1306c' },
+  avatar: { width: '100%', height: '100%', borderRadius: 29 },
+  tileName: { fontSize: 12, marginTop: 4, maxWidth: 72 },
+
+  viewer: { flex: 1, backgroundColor: '#000' },
+  full: { ...StyleSheet.absoluteFillObject },
+  bars: { flexDirection: 'row', position: 'absolute', top: 12, left: 8, right: 8, gap: 4 },
+  barTrack: { flex: 1, flexDirection: 'row', height: 3, borderRadius: 2, backgroundColor: '#ffffff55', overflow: 'hidden' },
+  barFill: { backgroundColor: '#fff' },
+
+  header: { position: 'absolute', top: 26, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerAvatar: { width: 32, height: 32, borderRadius: 16 },
+  headerName: { color: '#fff', fontWeight: '600', flex: 1 },
+  closeBtn: { padding: 8 },
+  closeTxt: { color: '#fff', fontSize: 18 },
+
+  zoneLeft: { position: 'absolute', top: 0, bottom: 0, left: 0, width: '33%' },
+  zoneRight: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '67%' },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock data + <code>getStories</code> · tile row · modal viewer · progress bars · timer with cleanup · styles. <strong>Deepen as time allows:</strong> per-segment <code>duration</code> already wired · pause that <em>banks</em> elapsed time (the scaffold restarts the segment on resume — upgrade to the banked-remainder timer from the mechanism section) · <code>Image.prefetch</code> of the next segment · seen-state. The viewer opens and auto-advances from minute 1 regardless.</p>
+
+    <h2 id="wizard">Form wizard</h2>
+<p class="note">One complete, runnable file: four steps + controlled inputs, progress, gating, and a mock submit. Paste it → the wizard renders immediately, Next stays disabled until each step is valid, Submit pops an alert → then deepen the marked stubs.</p>
+<pre><code>import React, { useState } from 'react';
+import {
+  View, Text, TextInput, Pressable, SafeAreaView, Alert, StyleSheet,
+} from 'react-native';
+
+<span class="cmt">// ── types ──</span>
+type SiteForm = { siteName: string; voltage: string; photoUris: string[] };
+type StepKey = 'details' | 'measurements' | 'photos' | 'review';
+const STEPS: StepKey[] = ['details', 'measurements', 'photos', 'review'];
+const EMPTY_FORM: SiteForm = { siteName: '', voltage: '', photoUris: [] };
+
+const API_URL = 'https://example.com/api';
+const makeId = () =&gt; `a-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+<span class="cmt">// ── mechanism: offline enqueue — stubbed as Alert so submit is visible ──</span>
+type Job = { idempotencyKey: string; url: string; method: 'POST'; body: unknown };
+function enqueue(job: Job): void {
+  <span class="cmt">// (prod) persist to MMKV + drain on reconnect via NetInfo</span>
+  Alert.alert('Submitted', `Queued assessment (key ${job.idempotencyKey})`);
+}
+
+<span class="cmt">// ── validation gate (deepen → per-step Zod schema) ──</span>
+function canAdvance(step: StepKey, form: SiteForm): boolean {
+  switch (step) {
+    case 'details':      return form.siteName.trim().length &gt; 0;
+    case 'measurements': return Number(form.voltage) &gt; 0;
+    case 'photos':       return form.photoUris.length &gt; 0;
+    case 'review':       return true;
+  }
+}
+
+<span class="cmt">// ── step views: dumb, controlled ──</span>
+type StepProps = { form: SiteForm; onChange: (patch: Partial&lt;SiteForm&gt;) =&gt; void };
+
+function StepView({ step, form, onChange }: { step: StepKey } &amp; StepProps) {
+  switch (step) {
+    case 'details':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Site name&lt;/Text&gt;
+          &lt;TextInput style={styles.input} value={form.siteName}
+            onChangeText={(t) =&gt; onChange({ siteName: t })} placeholder="North lot array" /&gt;
+        &lt;/View&gt;
+      );
+    case 'measurements':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Measured voltage (V)&lt;/Text&gt;
+          &lt;TextInput style={styles.input} value={form.voltage} keyboardType="numeric"
+            onChangeText={(t) =&gt; onChange({ voltage: t })} placeholder="240" /&gt;
+        &lt;/View&gt;
+      );
+    case 'photos':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Photos ({form.photoUris.length})&lt;/Text&gt;
+          &lt;Pressable style={styles.secondaryBtn}
+            onPress={() =&gt; onChange({ photoUris: [...form.photoUris, `photo://${form.photoUris.length + 1}`] })}&gt;
+            &lt;Text&gt;Add photo&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        &lt;/View&gt;
+      );
+    case 'review':
+      return (
+        &lt;View&gt;
+          &lt;Text style={styles.label}&gt;Review&lt;/Text&gt;
+          &lt;Text&gt;Site: {form.siteName || '—'}&lt;/Text&gt;
+          &lt;Text&gt;Voltage: {form.voltage || '—'}&lt;/Text&gt;
+          &lt;Text&gt;Photos: {form.photoUris.length}&lt;/Text&gt;
+        &lt;/View&gt;
+      );
+  }
+}
+
+<span class="cmt">// ── progress + nav ──</span>
+function WizardProgress({ index }: { index: number }) {
+  return (
+    &lt;View style={styles.progress}&gt;
+      {STEPS.map((key, i) =&gt; (
+        &lt;View key={key} style={[styles.segment, i &lt;= index ? styles.segOn : styles.segOff]} /&gt;
+      ))}
+    &lt;/View&gt;
+  );
+}
+
+<span class="cmt">// ── useWizard: the integration ──</span>
+function useWizard() {
+  const [index, setIndex] = useState(0);
+  const [form, setForm] = useState&lt;SiteForm&gt;(EMPTY_FORM);
+  const step = STEPS[index];
+  const isLast = index === STEPS.length - 1;
+
+  const update = (patch: Partial&lt;SiteForm&gt;) =&gt; setForm((f) =&gt; ({ ...f, ...patch }));
+  const next = () =&gt; { if (canAdvance(step, form)) setIndex((i) =&gt; Math.min(i + 1, STEPS.length - 1)); };
+  const back = () =&gt; setIndex((i) =&gt; Math.max(i - 1, 0));
+  const submit = () =&gt; {
+    const payload = { ...form, voltage: Number(form.voltage) };
+    enqueue({ idempotencyKey: makeId(), url: `${API_URL}/assessments`, method: 'POST', body: payload });
+  };
+
+  return { index, step, isLast, form, update, next, back, submit, canNext: canAdvance(step, form) };
+}
+
+<span class="cmt">// ── screen: ready ──</span>
+export default function App() {
+  const { index, step, isLast, form, update, next, back, submit, canNext } = useWizard();
+
+  return (
+    &lt;SafeAreaView style={styles.screen}&gt;
+      &lt;WizardProgress index={index} /&gt;
+      &lt;View style={styles.body}&gt;
+        &lt;StepView step={step} form={form} onChange={update} /&gt;
+      &lt;/View&gt;
+      &lt;View style={styles.navRow}&gt;
+        &lt;Pressable style={[styles.secondaryBtn, index === 0 &amp;&amp; styles.disabled]}
+          disabled={index === 0} onPress={back}&gt;
+          &lt;Text&gt;Back&lt;/Text&gt;
+        &lt;/Pressable&gt;
+        {isLast ? (
+          &lt;Pressable style={styles.primaryBtn} onPress={submit}&gt;
+            &lt;Text style={styles.primaryText}&gt;Submit&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        ) : (
+          &lt;Pressable style={[styles.primaryBtn, !canNext &amp;&amp; styles.disabled]}
+            disabled={!canNext} onPress={next}&gt;
+            &lt;Text style={styles.primaryText}&gt;Next&lt;/Text&gt;
+          &lt;/Pressable&gt;
+        )}
+      &lt;/View&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: 16 },
+  progress: { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  segment: { flex: 1, height: 4, borderRadius: 2 },
+  segOn: { backgroundColor: '#0084ff' },
+  segOff: { backgroundColor: '#e0e0e0' },
+  body: { flex: 1 },
+  label: { fontSize: 13, color: '#57606a', marginBottom: 6, marginTop: 12 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  navRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingTop: 12 },
+  primaryBtn: { backgroundColor: '#0084ff', paddingHorizontal: 22, paddingVertical: 12, borderRadius: 10 },
+  primaryText: { color: '#fff', fontWeight: '600' },
+  secondaryBtn: { borderWidth: 1, borderColor: '#ccc', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10 },
+  disabled: { opacity: 0.4 },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · <code>STEPS</code> · all four step views + controlled inputs · progress · nav + gating · styles. <strong>Deepen as time allows:</strong> <code>canAdvance</code> (inline checks → per-step Zod schema) · <code>enqueue</code> (Alert → offline outbox with MMKV + drain) · split step components out of the switch · resume-draft persist. The wizard steps through and gates from minute 1 regardless.</p>
+
+    <h2 id="feed">Infinite feed + search</h2>
+<p class="note">One complete, runnable file: UI + styles ready, <code>getItems</code> mocked over a paginated source, <code>useDebounced</code> real, the infinite query wired. Paste it → the list scrolls + pages + filters immediately on mock data → then deepen the marked stubs.</p>
+<pre><code>import React, { useState, useEffect, memo } from 'react';
+import {
+  View, Text, TextInput, FlatList, ActivityIndicator,
+  RefreshControl, SafeAreaView, StyleSheet,
+} from 'react-native';
+import {
+  QueryClient, QueryClientProvider, useInfiniteQuery,
+} from '@tanstack/react-query';
+
+<span class="cmt">// ── types ──</span>
+type Item = { id: string; title: string };
+type Page = { items: Item[]; nextCursor: string | null };
+
+<span class="cmt">// ── mock backend (swap for real) ──</span>
+const PAGE_SIZE = 20;
+const ALL: Item[] = Array.from({ length: 200 }, (_, i) =&gt; ({ id: String(i), title: `Item ${i}` }));
+
+<span class="cmt">// (prod) add a `signal?: AbortSignal` param and thread it into fetch so key changes abort.</span>
+async function getItems(cursor: string | null, q: string): Promise&lt;Page&gt; {
+  await new Promise((r) =&gt; setTimeout(r, 300));
+  const filtered = q ? ALL.filter((it) =&gt; it.title.toLowerCase().includes(q.toLowerCase())) : ALL;
+  const start = cursor ? Number(cursor) : 0;
+  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const next = start + PAGE_SIZE;
+  return { items: slice, nextCursor: next &lt; filtered.length ? String(next) : null };
+}
+
+<span class="cmt">// ── mechanism: debounce ──</span>
+function useDebounced&lt;T&gt;(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() =&gt; {
+    const id = setTimeout(() =&gt; setDebounced(value), delay);
+    return () =&gt; clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+<span class="cmt">// ── useFeed: the integration ──</span>
+function useFeed() {
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 300);
+
+  const {
+    data, fetchNextPage, hasNextPage, isFetchingNextPage,
+    isRefetching, refetch, status,
+  } = useInfiniteQuery&lt;Page, Error&gt;({
+    queryKey: ['items', debouncedSearch],
+    queryFn: ({ pageParam }) =&gt; getItems(pageParam as string | null, debouncedSearch),
+    initialPageParam: null,
+    getNextPageParam: (last) =&gt; last.nextCursor,
+    enabled: debouncedSearch.length === 0 || debouncedSearch.length &gt;= 2,
+    placeholderData: (prev) =&gt; prev,
+  });
+
+  const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];
+  const loadMore = () =&gt; { if (hasNextPage &amp;&amp; !isFetchingNextPage) void fetchNextPage(); };
+
+  return { items, search, setSearch, status, loadMore, isFetchingNextPage, refetch, isRefetching };
+}
+
+<span class="cmt">// ── UI: ready ──</span>
+const Row = memo(function Row({ item }: { item: Item }) {
+  return (
+    &lt;View style={styles.row}&gt;
+      &lt;Text style={styles.title}&gt;{item.title}&lt;/Text&gt;
+    &lt;/View&gt;
+  );
+});
+
+function FeedScreen() {
+  const {
+    items, search, setSearch, status,
+    loadMore, isFetchingNextPage, refetch, isRefetching,
+  } = useFeed();
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }}&gt;
+      &lt;TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search…"
+        style={styles.search}
+        autoCorrect={false}
+        autoCapitalize="none"
+      /&gt;
+      {status === 'pending' ? (
+        &lt;ActivityIndicator style={{ flex: 1 }} /&gt;
+      ) : (
+        &lt;FlatList
+          data={items}
+          keyExtractor={(it) =&gt; it.id}
+          renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+          onEndReachedThreshold={0.5}
+          onEndReached={loadMore}
+          refreshControl={
+            &lt;RefreshControl refreshing={isRefetching} onRefresh={() =&gt; void refetch()} /&gt;
+          }
+          ListFooterComponent={isFetchingNextPage ? &lt;ActivityIndicator style={{ margin: 16 }} /&gt; : null}
+          ListEmptyComponent={&lt;Text style={styles.empty}&gt;No results&lt;/Text&gt;}
+        /&gt;
+      )}
+    &lt;/SafeAreaView&gt;
+  );
+}
+
+const queryClient = new QueryClient();
+export default function App() {
+  return (
+    &lt;QueryClientProvider client={queryClient}&gt;
+      &lt;FeedScreen /&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+const styles = StyleSheet.create({
+  search: { margin: 12, height: 40, borderWidth: 1, borderColor: '#ccc', borderRadius: 10, paddingHorizontal: 14 },
+  row: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  title: { fontSize: 15 },
+  empty: { textAlign: 'center', color: '#888', marginTop: 32 },
+});</code></pre>
+    <p class="note"><strong>Ready (don't retype):</strong> types · mock paginated <code>getItems</code> · <code>useDebounced</code> · the infinite query + list wiring · UI + styles · QueryClient. <strong>Deepen as time allows:</strong> thread <code>signal</code> into <code>getItems</code> (abort on key change) · Zod validation at the boundary · error state · <code>maintainVisibleContentPosition</code>. The list scrolls, pages, and filters from minute 1 regardless.</p>
+
+  </main>
+
+</div>
+
+</body>
+</html>
