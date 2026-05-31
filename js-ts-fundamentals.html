@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JavaScript / TypeScript Fundamentals</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .label-bad, .label-good {
+    display: inline-block;
+    font-size: 11px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .label-bad { background: rgba(207, 34, 46, 0.1); color: var(--bad); }
+  .label-good { background: rgba(26, 127, 55, 0.1); color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>JS / TS Fundamentals</h1>
+    <ul>
+      <li><a class="group">Closures &amp; scope</a></li>
+      <li><a href="#var-let">var vs let in loops</a></li>
+
+      <li><a class="group">Async model</a></li>
+      <li><a href="#event-loop">Event loop (micro/macro)</a></li>
+      <li><a href="#combinators">Promise combinators</a></li>
+      <li><a href="#serial-parallel">Serial vs parallel await</a></li>
+
+      <li><a class="group">Utilities</a></li>
+      <li><a href="#debounce">debounce / throttle</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">JavaScript / TypeScript Fundamentals</h1>
+    <div class="doc-sub">Code-only reference: closures, the event loop, promise combinators, async patterns, debounce.</div>
+
+    <!-- ============ VAR LET ============ -->
+    <h2 id="var-let">Closures in loops — var vs let</h2>
+    <p class="note">A closure captures the <em>variable binding</em>, not a snapshot of its value — so <em>when</em> the callback runs decides what it reads.</p>
+
+    <div class="label-bad">var — one shared binding</div>
+<pre><code>for (var i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; console.log(i), 0);
+}
+<span class="cmt">// logs 3, 3, 3</span></code></pre>
+    <p class="note"><code>var</code> is function-scoped, so the whole loop shares ONE <code>i</code>. All three callbacks close over that same binding, and they run <em>after</em> the loop finishes (<code>setTimeout</code> is async) — when <code>i</code> is already 3.</p>
+
+    <div class="label-good">let — a fresh binding per iteration</div>
+<pre><code>for (let i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; console.log(i), 0);
+}
+<span class="cmt">// logs 0, 1, 2</span></code></pre>
+    <p class="note"><code>let</code> is block-scoped, and a <code>for</code> loop creates a new <code>i</code> each iteration, so each callback captures its own. Other fixes: an IIFE per iteration, or pass the value as an argument — <code>setTimeout((v) =&gt; console.log(v), 0, i)</code>.</p>
+
+    <!-- ============ EVENT LOOP ============ -->
+    <h2 id="event-loop">Event loop — microtasks vs macrotasks</h2>
+<pre><code>console.log('A');
+setTimeout(() =&gt; console.log('B'), 0);
+Promise.resolve().then(() =&gt; console.log('C'));
+console.log('D');
+<span class="cmt">// logs A, D, C, B</span></code></pre>
+    <p class="note">Each turn: run synchronous code to completion → drain the <strong>entire</strong> microtask queue → run <strong>one</strong> macrotask → drain microtasks again → repeat.</p>
+    <table>
+      <thead><tr><th>Microtasks (drained first)</th><th>Macrotasks (one per turn, after)</th></tr></thead>
+      <tbody>
+        <tr><td><code>Promise.then/catch/finally</code>, <code>await</code> continuations, <code>queueMicrotask</code></td><td><code>setTimeout</code>, <code>setInterval</code>, I/O, UI events</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><code>setTimeout(fn, 0)</code> does not mean "run now" — it queues a <strong>macrotask</strong>, and the whole microtask queue drains ahead of it. So a resolved <code>Promise.then</code> always runs before <code>setTimeout(…, 0)</code>. Code after <code>await</code> is a microtask. A microtask that keeps queuing microtasks can starve macrotasks.</p>
+
+    <!-- ============ COMBINATORS ============ -->
+    <h2 id="combinators">Promise combinators</h2>
+    <table>
+      <thead><tr><th>Combinator</th><th>Resolves</th><th>Rejects</th></tr></thead>
+      <tbody>
+        <tr><td><code>Promise.all</code></td><td>when ALL fulfill → array of values</td><td>immediately on the FIRST rejection (other results discarded)</td></tr>
+        <tr><td><code>Promise.allSettled</code></td><td>when all settle → array of <code>{ status, value | reason }</code></td><td>never</td></tr>
+        <tr><td><code>Promise.race</code></td><td>when the FIRST settles (fulfilled or rejected)</td><td>if that first one rejects</td></tr>
+        <tr><td><code>Promise.any</code></td><td>on the first FULFILLED</td><td>only if ALL reject (<code>AggregateError</code>)</td></tr>
+      </tbody>
+    </table>
+<pre><code><span class="cmt">// all — all-or-nothing (throws if any rejects; the good results are lost)</span>
+const [a, b, c] = await Promise.all([fa(), fb(), fc()]);
+
+<span class="cmt">// allSettled — collect everything, never throws</span>
+const results = await Promise.allSettled([fa(), fb(), fc()]);
+const ok     = results.filter((r) =&gt; r.status === 'fulfilled').map((r) =&gt; r.value);
+const failed = results.filter((r) =&gt; r.status === 'rejected');
+
+<span class="cmt">// race — first to settle wins (timeout pattern)</span>
+await Promise.race([work(), timeout(5000)]);
+
+<span class="cmt">// any — first to SUCCEED (rejects only if all fail)</span>
+await Promise.any([mirrorA(), mirrorB()]);</code></pre>
+    <p class="note">TypeScript: <code>allSettled</code> returns <code>PromiseSettledResult&lt;T&gt;[]</code>; checking <code>r.status === 'fulfilled'</code> narrows to <code>{ value }</code> (vs <code>{ reason }</code>). Results come back in <strong>input order</strong>, not completion order. Rejected/discarded promises are not cancelled — they keep running.</p>
+
+    <!-- ============ SERIAL PARALLEL ============ -->
+    <h2 id="serial-parallel">Serial vs parallel await</h2>
+
+    <div class="label-bad">serial — sum of all latencies</div>
+<pre><code>for (const id of ids) {
+  await fetchOne(id);            <span class="cmt">// waits for each before starting the next</span>
+}
+<span class="cmt">// 5 × 200ms ≈ 1000ms; a rejection stops the loop — later ids never fire</span></code></pre>
+
+    <div class="label-good">parallel — slowest single latency</div>
+<pre><code>await Promise.all(ids.map(fetchOne));        <span class="cmt">// all fire at once; ≈ 200ms; fail-fast</span>
+
+await Promise.allSettled(ids.map(fetchOne)); <span class="cmt">// all fire; keep every result</span></code></pre>
+    <p class="note">Independent work should be parallel — an accidental <code>for…of await</code> is a common silent slowdown (N× the round-trips). Use serial only when each call depends on the previous result; to rate-limit, use bounded concurrency (chunk the ids and <code>Promise.all</code> each chunk) rather than full serial.</p>
+
+    <!-- ============ DEBOUNCE ============ -->
+    <h2 id="debounce">debounce (and throttle)</h2>
+    <p class="note">Wraps a function so it runs only after <code>ms</code> of silence (no further calls). The closure holds the timer; each call clears the pending one and reschedules.</p>
+<pre><code>function debounce&lt;T extends (...args: any[]) =&gt; void&gt;(fn: T, ms: number) {
+  let timer: ReturnType&lt;typeof setTimeout&gt; | undefined;
+  return function (this: unknown, ...args: Parameters&lt;T&gt;) {
+    clearTimeout(timer);
+    timer = setTimeout(() =&gt; fn.apply(this, args), ms);
+  };
+}
+
+<span class="cmt">// with a canceller</span>
+function debounceCancelable&lt;T extends (...args: any[]) =&gt; void&gt;(fn: T, ms: number) {
+  let timer: ReturnType&lt;typeof setTimeout&gt; | undefined;
+  const debounced = function (this: unknown, ...args: Parameters&lt;T&gt;) {
+    clearTimeout(timer);
+    timer = setTimeout(() =&gt; fn.apply(this, args), ms);
+  };
+  debounced.cancel = () =&gt; clearTimeout(timer);
+  return debounced;
+}</code></pre>
+    <p class="note"><code>fn.apply(this, args)</code> forwards the arguments and <code>this</code> (so it works on methods) — which is why the returned function is a regular <code>function</code>, not an arrow. <strong>throttle</strong> runs at most once per <code>ms</code> (on a schedule); <strong>debounce</strong> runs after <code>ms</code> of quiet (waits for calls to stop). The React <em>value</em>-debounce hook (<code>useDebounced</code>) is in the React Query patterns reference.</p>
+
+  </main>
+
+</div>
+
+</body>
+</html>
