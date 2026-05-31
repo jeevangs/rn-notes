@@ -130,6 +130,9 @@
 
       <li><a class="group">Utilities</a></li>
       <li><a href="#debounce">debounce / throttle</a></li>
+
+      <li><a class="group">Algorithms</a></li>
+      <li><a href="#binary-search">Binary search</a></li>
     </ul>
   </aside>
 
@@ -235,6 +238,46 @@ function debounceCancelable&lt;T extends (...args: any[]) =&gt; void&gt;(fn: T, 
   return debounced;
 }</code></pre>
     <p class="note"><code>fn.apply(this, args)</code> forwards the arguments and <code>this</code> (so it works on methods) — which is why the returned function is a regular <code>function</code>, not an arrow. <strong>throttle</strong> runs at most once per <code>ms</code> (on a schedule); <strong>debounce</strong> runs after <code>ms</code> of quiet (waits for calls to stop). The React <em>value</em>-debounce hook (<code>useDebounced</code>) is in the React Query patterns reference.</p>
+
+    <!-- ============ BINARY SEARCH ============ -->
+    <h2 id="binary-search">Binary search</h2>
+    <p class="note">Three forms. The bug source is always the interval invariant — pick closed or half-open and stay consistent.</p>
+
+    <h3>Exact find — closed interval [lo, hi]</h3>
+<pre><code>function search(nums: number[], target: number): number {
+  let lo = 0, hi = nums.length - 1;          <span class="cmt">// closed</span>
+  while (lo &lt;= hi) {                          <span class="cmt">// &lt;= : hi is a valid index</span>
+    const mid = Math.floor((lo + hi) / 2);    <span class="cmt">// Math.floor — JS division is float</span>
+    if (nums[mid] === target) return mid;
+    if (nums[mid] &lt; target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}</code></pre>
+
+    <h3>Lower bound — half-open [lo, hi) — first index with nums[i] &gt;= target</h3>
+<pre><code>function lowerBound(nums: number[], target: number): number {
+  let lo = 0, hi = nums.length;              <span class="cmt">// half-open: hi = length, not length-1</span>
+  while (lo &lt; hi) {                           <span class="cmt">// &lt; : hi is one-past</span>
+    const mid = Math.floor((lo + hi) / 2);
+    if (nums[mid] &lt; target) lo = mid + 1;
+    else hi = mid;                            <span class="cmt">// keep mid as a candidate</span>
+  }
+  return lo;                                  <span class="cmt">// = insertion point if absent</span>
+}</code></pre>
+
+    <h3>Search on the answer — monotonic predicate</h3>
+<pre><code><span class="cmt">// When feasibility is monotonic (smaller fails, larger works),</span>
+<span class="cmt">// binary-search the ANSWER space, not the array (Koko bananas, min ship capacity).</span>
+function minFeasible(lo: number, hi: number, ok: (x: number) =&gt; boolean): number {
+  while (lo &lt; hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (ok(mid)) hi = mid;                    <span class="cmt">// works -&gt; try smaller</span>
+    else lo = mid + 1;                         <span class="cmt">// fails -&gt; go bigger</span>
+  }
+  return lo;
+}</code></pre>
+    <p class="note"><strong>Invariant:</strong> exact-find uses <code>lo &lt;= hi</code> with <code>hi = n - 1</code> (closed); boundary/insertion uses <code>lo &lt; hi</code> with <code>hi = n</code> (half-open). Mixing them is the classic off-by-one. Overflow isn't a concern in JS (safe to 2^53), but always <code>Math.floor</code> the midpoint.</p>
 
   </main>
 
