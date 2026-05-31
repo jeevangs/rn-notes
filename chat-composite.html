@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Real-time Chat — Composite Build</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .step { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: rgba(9,105,218,0.1); color: var(--link); margin-right: 6px; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Chat Composite</h1>
+    <ul>
+      <li><a class="group">Overview</a></li>
+      <li><a href="#architecture">Architecture &amp; build order</a></li>
+      <li><a href="#seams">Given helpers</a></li>
+
+      <li><a class="group">Foundation</a></li>
+      <li><a href="#types">A · Types</a></li>
+      <li><a href="#skeleton">B · useChat skeleton</a></li>
+
+      <li><a class="group">Mechanisms</a></li>
+      <li><a href="#ws">useWebSocket</a></li>
+      <li><a href="#outbox">Offline outbox</a></li>
+
+      <li><a class="group">Wire it up</a></li>
+      <li><a href="#read">C · Read (history + live)</a></li>
+      <li><a href="#send">D · Send</a></li>
+      <li><a href="#reconcile">E · Reconcile</a></li>
+
+      <li><a class="group">Assembled</a></li>
+      <li><a href="#use-chat">Full useChat</a></li>
+      <li><a href="#screen">Chat screen</a></li>
+      <li><a href="#extensions">Extensions</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Real-time Chat — Composite Build</h1>
+    <div class="doc-sub">Progressive, block-by-block: fetch history + optimistic send + live WebSocket + offline queue, converging on one cache.</div>
+
+    <!-- ============ ARCHITECTURE ============ -->
+    <h2 id="architecture">Architecture &amp; build order</h2>
+    <p class="note">The React Query cache <code>['messages', roomId]</code> is the single source of truth. Three writers converge on it; the list is a pure render of it.</p>
+<pre><code>React Query cache  ['messages', roomId]    ← single source of truth
+   ▲            ▲              ▲
+   │            │              │
+initial fetch   │          your sends
+ (useQuery)     │      (optimistic + enqueue)
+            live WS push
+        (onMessage → setQueryData)</code></pre>
+    <p class="note">Build order — keep something runnable at every step: <strong>render → load → send → live → reconcile → harden.</strong> Each step below leaves a working app.</p>
+
+    <!-- ============ SEAMS ============ -->
+    <h2 id="seams">Given helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+async function getMessages(roomId: string): Promise&lt;Message[]&gt; {
+  const r = await fetch(`${API_URL}/rooms/${roomId}/messages`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return MessagesSchema.parse(await r.json());      <span class="cmt">// validate at the boundary</span>
+}
+
+const wsUrl = (roomId: string) =&gt; `wss://example.com/rooms/${roomId}`;
+
+const currentUserId = 'me';   <span class="cmt">// from auth store / context in a real app</span></code></pre>
+
+    <!-- ============ TYPES ============ -->
+    <h2 id="types"><span class="step">A</span>Types / data model</h2>
+    <p class="note"><code>clientId</code> is the dedup key (set on optimistic sends, echoed by the server). <code>ts</code> drives ordering. <code>status</code> is client-only — not from the server, so it lives outside the schema.</p>
+<pre><code>import { z } from 'zod';
+
+const MessageSchema = z.object({
+  id: z.string(),                    <span class="cmt">// server id (authoritative)</span>
+  clientId: z.string().optional(),   <span class="cmt">// client-generated → DEDUP key</span>
+  roomId: z.string(),
+  senderId: z.string(),
+  text: z.string(),
+  ts: z.number(),                    <span class="cmt">// epoch ms → ORDERING</span>
+});
+const MessagesSchema = z.array(MessageSchema);
+
+type Message = z.infer&lt;typeof MessageSchema&gt; &amp; {
+  status?: 'pending' | 'sent' | 'failed';   <span class="cmt">// client-only optimistic marker</span>
+};</code></pre>
+
+    <!-- ============ SKELETON ============ -->
+    <h2 id="skeleton"><span class="step">B</span>useChat skeleton — the spine</h2>
+    <p class="note">No logic yet — just the three writers converging on one key. This compiles and (after C) renders a read-only chat.</p>
+<pre><code>function useChat(roomId: string) {
+  const qc = useQueryClient();
+  const key = ['messages', roomId] as const;        <span class="cmt">// ◀ the single source of truth</span>
+
+  <span class="cmt">// WRITER 1 · initial history          → C</span>
+  const { data: messages = [], status } = useQuery({ queryKey: key, queryFn: () =&gt; getMessages(roomId) });
+
+  <span class="cmt">// WRITER 2 · live updates             → C</span>
+  useChatSocket(roomId, key);
+
+  <span class="cmt">// WRITER 3 · send                     → D</span>
+  const send = (text: string) =&gt; { /* optimistic + enqueue */ };
+
+  return { messages, send, status };
+}</code></pre>
+
+    <!-- ============ WEBSOCKET ============ -->
+    <h2 id="ws"><span class="step">mechanism</span>useWebSocket (generic)</h2>
+    <p class="note">A reusable transport primitive — stable-ref handler so it reconnects only on <code>[url]</code>, with jittered backoff. The chat layer wraps this; it knows nothing about chat.</p>
+<pre><code>type WsStatus = 'idle' | 'connecting' | 'open' | 'closed';
+
+function useWebSocket&lt;T&gt;(url: string, onMessage: (msg: T) =&gt; void) {
+  const [status, setStatus] = useState&lt;WsStatus&gt;('idle');
+  const wsRef = useRef&lt;WebSocket | null&gt;(null);
+  const attemptsRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;                 <span class="cmt">// latest handler, every render — no reconnect</span>
+
+  useEffect(() =&gt; {
+    isMountedRef.current = true;
+
+    const connect = () =&gt; {
+      if (!isMountedRef.current) return;
+      setStatus('connecting');
+      const ws = new WebSocket(url);
+      wsRef.current = ws;
+
+      ws.onopen = () =&gt; { attemptsRef.current = 0; setStatus('open'); };
+      ws.onmessage = (e) =&gt; { try { onMessageRef.current(JSON.parse(e.data) as T); } catch {} };
+      ws.onerror = () =&gt; ws.close();
+      ws.onclose = () =&gt; {
+        setStatus('closed');                        <span class="cmt">// status</span>
+        if (!isMountedRef.current) return;           <span class="cmt">// guard</span>
+        const attempt = ++attemptsRef.current;       <span class="cmt">// backoff</span>
+        const delay = Math.min(30_000, 1000 * 2 ** attempt) + Math.random() * 1000;
+        setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+    return () =&gt; { isMountedRef.current = false; wsRef.current?.close(); };
+  }, [url]);                                         <span class="cmt">// [url] only — handler is refed</span>
+
+  return { status };
+}</code></pre>
+
+    <!-- ============ OUTBOX ============ -->
+    <h2 id="outbox"><span class="step">mechanism</span>Offline outbox (enqueue / drain)</h2>
+    <p class="note">Queues writes while offline, persists them (MMKV), drains in order on reconnect. Each job carries an idempotency key so a retry can't double-apply. Generic — any feature enqueues any request.</p>
+<pre><code>import NetInfo from '@react-native-community/netinfo';
+import { MMKV } from 'react-native-mmkv';
+
+const storage = new MMKV();
+const KEY = 'outbox';
+
+type Job = { idempotencyKey: string; url: string; method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body: unknown; attempts: number };
+
+const load = (): Job[] =&gt; { const r = storage.getString(KEY); return r ? (JSON.parse(r) as Job[]) : []; };
+const save = (jobs: Job[]) =&gt; storage.set(KEY, JSON.stringify(jobs));
+
+let draining = false;
+
+export function enqueue(job: Omit&lt;Job, 'attempts'&gt;) {
+  const jobs = load();
+  jobs.push({ ...job, attempts: 0 });
+  save(jobs);
+  void drain();
+}
+
+export async function drain(): Promise&lt;void&gt; {
+  if (draining) return;
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) return;
+  draining = true;
+  try {
+    let jobs = load();
+    while (jobs.length) {
+      const job = jobs[0];
+      try {
+        const r = await fetch(job.url, {
+          method: job.method,
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': job.idempotencyKey },
+          body: JSON.stringify(job.body),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        jobs = jobs.slice(1);                        <span class="cmt">// success → drop head, keep draining</span>
+        save(jobs);
+      } catch {
+        jobs[0] = { ...job, attempts: job.attempts + 1 };
+        save(jobs);
+        break;                                       <span class="cmt">// failure → stop, retry next reconnect</span>
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+NetInfo.addEventListener((s) =&gt; { if (s.isConnected) void drain(); });</code></pre>
+
+    <!-- ============ READ ============ -->
+    <h2 id="read"><span class="step">C</span>Read path — history + live</h2>
+    <p class="note">History is the <code>useQuery</code> in the skeleton. Live updates wrap the generic socket: build the url from <code>roomId</code>, validate each frame, merge into the same <code>key</code>. No <code>useCallback</code> needed — <code>useWebSocket</code> refs the handler.</p>
+<pre><code>function useChatSocket(roomId: string, key: readonly unknown[]) {
+  const qc = useQueryClient();
+
+  useWebSocket&lt;unknown&gt;(wsUrl(roomId), (raw) =&gt; {
+    const parsed = MessageSchema.safeParse(raw);     <span class="cmt">// validate (don't trust `as T`)</span>
+    if (!parsed.success) return;                     <span class="cmt">// drop garbage frames</span>
+    const incoming = parsed.data;
+    if (incoming.roomId !== roomId) return;          <span class="cmt">// guard (multiplexed socket)</span>
+
+    qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; mergeMessage(old, incoming));
+  });
+}</code></pre>
+    <p class="note">Changing <code>roomId</code> changes the url → <code>useWebSocket</code> reconnects to the new room and tears down the old socket, for free.</p>
+
+    <!-- ============ SEND ============ -->
+    <h2 id="send"><span class="step">D</span>Send — optimistic + enqueue</h2>
+    <p class="note"><code>clientId</code> does three jobs: optimistic identity, dedup key (matched by the WS echo), and idempotency key (reused by the outbox). Generated once.</p>
+<pre><code>const send = (text: string) =&gt; {
+  const clientId = crypto.randomUUID();
+
+  const optimistic: Message = {
+    id: `temp-${clientId}`,                          <span class="cmt">// placeholder until server id arrives</span>
+    clientId, roomId, senderId: currentUserId, text,
+    ts: Date.now(), status: 'pending',
+  };
+
+  qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; [...old, optimistic]);   <span class="cmt">// instant bubble</span>
+
+  enqueue({
+    idempotencyKey: clientId,                        <span class="cmt">// retry-safe</span>
+    url: `${API_URL}/rooms/${roomId}/messages`,
+    method: 'POST',
+    body: { clientId, text },                        <span class="cmt">// server echoes clientId on the WS broadcast</span>
+  });
+};</code></pre>
+    <p class="note">No <code>onSuccess</code>: the <strong>WebSocket echo is the reconciliation channel</strong> — the read path closes the write path's loop. Online or after a reconnect, the echo flips the bubble <code>pending → sent</code>.</p>
+
+    <!-- ============ RECONCILE ============ -->
+    <h2 id="reconcile"><span class="step">E</span>Reconcile — dedup + ordering</h2>
+    <p class="note">Every socket frame runs through this: skip duplicates by server id, reconcile my own echo by <code>clientId</code> (swap temp → server, mark sent), else append.</p>
+<pre><code>function mergeMessage(list: Message[], incoming: Message): Message[] {
+  if (list.some((m) =&gt; m.id === incoming.id)) return list;          <span class="cmt">// WS redelivery</span>
+
+  const i = list.findIndex((m) =&gt; m.clientId &amp;&amp; m.clientId === incoming.clientId);
+  if (i !== -1) {                                                   <span class="cmt">// echo of MY optimistic send</span>
+    const copy = list.slice();
+    copy[i] = { ...incoming, status: 'sent' };                      <span class="cmt">// temp → server version</span>
+    return copy;
+  }
+  return [...list, incoming];                                       <span class="cmt">// new message from someone else</span>
+}</code></pre>
+    <p class="note">Ordering: sort by <code>ts</code> on read via <code>select</code>, then an inverted FlatList. Keep the bubble's key on <code>clientId</code> (when present) so it stays stable through the temp→server swap and doesn't flicker.</p>
+
+    <!-- ============ FULL USECHAT ============ -->
+    <h2 id="use-chat"><span class="step">assembled</span>Full useChat</h2>
+<pre><code>function useChat(roomId: string) {
+  const qc = useQueryClient();
+  const key = ['messages', roomId] as const;
+
+  const { data: messages = [], status } = useQuery({
+    queryKey: key,
+    queryFn: () =&gt; getMessages(roomId),
+    select: (msgs) =&gt; [...msgs].sort((a, b) =&gt; b.ts - a.ts),   <span class="cmt">// newest first (for inverted list)</span>
+  });
+
+  useChatSocket(roomId, key);
+
+  const send = (text: string) =&gt; {
+    const clientId = crypto.randomUUID();
+    const optimistic: Message = {
+      id: `temp-${clientId}`, clientId, roomId,
+      senderId: currentUserId, text, ts: Date.now(), status: 'pending',
+    };
+    qc.setQueryData&lt;Message[]&gt;(key, (old = []) =&gt; [...old, optimistic]);
+    enqueue({
+      idempotencyKey: clientId,
+      url: `${API_URL}/rooms/${roomId}/messages`,
+      method: 'POST',
+      body: { clientId, text },
+    });
+  };
+
+  return { messages, send, status };
+}</code></pre>
+
+    <!-- ============ SCREEN ============ -->
+    <h2 id="screen"><span class="step">assembled</span>Chat screen (UI)</h2>
+<pre><code>const MessageBubble = memo(function MessageBubble({ message, mine }: { message: Message; mine: boolean }) {
+  return (
+    &lt;View style={[styles.row, mine ? styles.right : styles.left]}&gt;
+      &lt;View style={[styles.bubble, mine ? styles.mine : styles.them]}&gt;
+        &lt;Text style={mine ? styles.mineText : undefined}&gt;{message.text}&lt;/Text&gt;
+        {mine &amp;&amp; message.status === 'pending' &amp;&amp; &lt;Text style={styles.meta}&gt;•••&lt;/Text&gt;}
+        {mine &amp;&amp; message.status === 'sent'    &amp;&amp; &lt;Text style={styles.meta}&gt;✓&lt;/Text&gt;}
+        {mine &amp;&amp; message.status === 'failed'  &amp;&amp; &lt;Text style={styles.fail}&gt;! tap to retry&lt;/Text&gt;}
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+});
+
+function ChatScreen({ roomId }: { roomId: string }) {
+  const { messages, send, status } = useChat(roomId);
+  const [draft, setDraft] = useState('');
+
+  if (status === 'pending') return &lt;ActivityIndicator /&gt;;
+  if (status === 'error')   return &lt;Text&gt;Couldn't load messages&lt;/Text&gt;;
+
+  const onSend = () =&gt; {
+    const text = draft.trim();
+    if (!text) return;
+    send(text);
+    setDraft('');
+  };
+
+  return (
+    &lt;SafeAreaView style={{ flex: 1 }} edges={['top']}&gt;
+      &lt;KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      &gt;
+        &lt;FlatList
+          data={messages}                              <span class="cmt">// already newest-first via select</span>
+          inverted
+          keyExtractor={(m) =&gt; m.clientId ?? m.id}      <span class="cmt">// stable through temp→server swap</span>
+          renderItem={({ item }) =&gt; (
+            &lt;MessageBubble message={item} mine={item.senderId === currentUserId} /&gt;
+          )}
+        /&gt;
+        &lt;View style={styles.composer}&gt;
+          &lt;TextInput value={draft} onChangeText={setDraft} placeholder="Message…" style={styles.input} multiline /&gt;
+          &lt;Pressable onPress={onSend} disabled={!draft.trim()} style={styles.sendBtn}&gt;&lt;Text&gt;Send&lt;/Text&gt;&lt;/Pressable&gt;
+        &lt;/View&gt;
+      &lt;/KeyboardAvoidingView&gt;
+    &lt;/SafeAreaView&gt;
+  );
+}</code></pre>
+
+    <!-- ============ EXTENSIONS ============ -->
+    <h2 id="extensions">Extensions</h2>
+    <table>
+      <thead><tr><th>Need</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>Survive restart / read offline</td><td>SQLite as source of truth: read local → fetch <strong>delta</strong> since last <code>ts</code> (<code>?since=</code>) → WS for live. The delta also closes the gap where the socket missed pushes while closed. (Or <code>persistQueryClient</code> for a lighter "instant paint.")</td></tr>
+        <tr><td>Long history</td><td><code>useInfiniteQuery</code> with a cursor; <code>onEndReached</code> on the (inverted) list to page older messages.</td></tr>
+        <tr><td>Many rooms at scale</td><td>One multiplexed socket lifted to app level (don't reconnect per room); the <code>roomId</code> guard becomes routing into the right cache key.</td></tr>
+        <tr><td>Permanent send failure</td><td>Outbox gives up after N attempts → a hook sets <code>status: 'failed'</code> on that <code>clientId</code> → "tap to retry" re-enqueues.</td></tr>
+        <tr><td>Single source of truth</td><td>Pick the RQ cache <em>or</em> a persisted store for "messages" — never render from both, or items double.</td></tr>
+      </tbody>
+    </table>
+
+  </main>
+
+</div>
+
+</body>
+</html>
