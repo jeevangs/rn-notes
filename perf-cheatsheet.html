@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perf Cheat Sheet</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --bad: #cf222e;
+    --good: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  .label-bad, .label-good {
+    display: inline-block;
+    font-size: 11px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .label-bad { background: rgba(207, 34, 46, 0.1); color: var(--bad); }
+  .label-good { background: rgba(26, 127, 55, 0.1); color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+
+  @media print {
+    .layout { display: block; }
+    .sidebar { display: none; }
+    .main { max-width: none; padding: 0; }
+    pre, pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+    pre { border: 1px solid #ccc; }
+    h2, h3 { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+    html, body { font-size: 12px; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>Perf Cheat Sheet</h1>
+    <ul>
+      <li><a class="group">Recipes</a></li>
+      <li><a href="#symptom-table">Symptom → likely cause</a></li>
+      <li><a href="#diagnose-flow">Diagnosing jank — the flow</a></li>
+      <li><a href="#inline-props">Inline literal props (anti-pattern)</a></li>
+      <li><a href="#memo-child">memo on child</a></li>
+      <li><a href="#stable-ref">Stable ref pattern</a></li>
+      <li><a href="#stale-closure">Stale closure</a></li>
+      <li><a href="#flatlist-props">FlatList — perf props</a></li>
+      <li><a href="#flatlist-row">Memoized row + stable handlers</a></li>
+      <li><a href="#flamegraph">Reading a flamegraph (Hermes sampling profiler)</a></li>
+      <li><a href="#thread-isolation">JS thread vs UI thread — proving which is starved</a></li>
+      <li><a href="#android-only">"Janky only on Android" — divergence checklist</a></li>
+      <li><a href="#selector-fanout">Render fan-out — only the changed item re-renders</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">Perf Cheat Sheet</h1>
+    <div class="doc-sub">Debug + optimize recipes — paste-ready.</div>
+
+<h2 id="symptom-table">Symptom → likely cause</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th>Where to look</th></tr></thead>
+      <tbody>
+        <tr><td>Whole screen re-renders on every keystroke</td><td>State lives too high; or context value is a new object each render</td><td><a href="#context-split">Context split</a></td></tr>
+        <tr><td>List rows re-render when one row changes</td><td>Row not memoized; or <code>renderItem</code>/<code>keyExtractor</code> is a new function each render</td><td><a href="#flatlist-row">Memoized row</a></td></tr>
+        <tr><td>Scroll jank on long lists</td><td>Missing <code>keyExtractor</code> / no <code>getItemLayout</code> / heavy row component</td><td><a href="#flatlist-props">FlatList props</a></td></tr>
+        <tr><td>App hangs for ~1s on screen open</td><td>Sync work in render or in <code>useEffect</code> with no <code>InteractionManager</code></td><td><a href="#interaction">runAfterInteractions</a></td></tr>
+        <tr><td>Memory grows over time</td><td>Uncleaned timers / subscriptions / listeners</td><td><a href="#cleanup">Cleanup</a></td></tr>
+        <tr><td>Animation drops frames</td><td>Animating layout props on JS thread instead of transform/opacity on native</td><td><a href="#animation">Animation</a></td></tr>
+        <tr><td>"Cannot update state on unmounted component"</td><td>Async work resolves after unmount</td><td><a href="#mounted">isMounted</a> / <a href="#abort">AbortController</a></td></tr>
+        <tr><td>Stale value in callback</td><td>Closure captured first-render value; deps missing</td><td><a href="#stale-closure">Stale closure</a></td></tr>
+        <tr><td>WebSocket reconnects on every render</td><td>Effect dep array re-creating; handler not in ref</td><td><a href="#stable-ref">Stable ref</a></td></tr>
+      </tbody>
+    </table>
+
+<h2 id="diagnose-flow">Diagnosing jank — the flow</h2>
+    <p class="note">A repeatable order for finding a frame-drop cause instead of guessing.</p>
+    <ol>
+      <li><strong>Read the dual FPS</strong> (Perf Monitor). JS low + UI fine → JS-thread work (logic / re-renders). UI low too → native / layout (long lists, overdraw, large images). See <a href="#thread-isolation">JS vs UI thread</a>.</li>
+      <li><strong>If JS-bound, capture a Hermes sampling profile</strong> and read the flame — the widest frame is the hot path. See <a href="#flamegraph">reading a flamegraph</a>.</li>
+      <li><strong>Match the hot path to a cause:</strong>
+        <ul>
+          <li>An effect / subscription re-running every render → <a href="#stale-closure">stale closure</a> / missing <a href="#stable-ref">stable ref</a>.</li>
+          <li>One update re-rendering a whole list → <a href="#selector-fanout">render fan-out</a>.</li>
+          <li>Heavy synchronous work (large <code>JSON.parse</code>, unmemoized derivation) blocking the JS thread.</li>
+        </ul>
+      </li>
+      <li><strong>Apply the fix:</strong> stable ref or functional <code>setState</code> for stale closures · per-id selectors for fan-out · <code>useMemo</code> or <code>InteractionManager</code> to defer heavy work · move animations to the UI thread (Reanimated / native driver).</li>
+    </ol>
+    <p class="note">If JS looks idle but frames still drop, the cost is on the UI / native side — profile with Xcode Instruments (Time Profiler) or Perfetto instead of the Hermes profiler.</p>
+
+<h2 id="inline-props">Inline literal props (anti-pattern)</h2>
+    <div class="label-bad">avoid</div>
+<pre><code>&lt;Row
+  item={item}
+  style={{ padding: 12 }}                       <span class="cmt">// new object every render</span>
+  onPress={() =&gt; navigation.navigate('Detail')} <span class="cmt">// new function every render</span>
+  meta={['a', 'b']}                              <span class="cmt">// new array every render</span>
+/&gt;</code></pre>
+
+    <div class="label-good">prefer</div>
+<pre><code>const META = ['a', 'b'];                   <span class="cmt">// hoist constant</span>
+const onPressRow = useCallback(             <span class="cmt">// stable function</span>
+  () =&gt; navigation.navigate('Detail'),
+  [navigation]
+);
+
+&lt;Row item={item} style={styles.row} onPress={onPressRow} meta={META} /&gt;
+
+const styles = StyleSheet.create({ row: { padding: 12 } });</code></pre>
+    <p class="note">Any <code>{...}</code> literal in props creates a new identity each render — breaks <code>memo</code> equality on the child.</p>
+
+<h2 id="memo-child">memo on child</h2>
+<pre><code>const Row = memo(function Row({ item, onPress }: {
+  item: Item;
+  onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(item.id)}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+<span class="cmt">// Custom comparison if needed</span>
+const Row2 = memo(
+  function Row2({ item }: { item: Item }) { return &lt;Text&gt;{item.title}&lt;/Text&gt;; },
+  (prev, next) =&gt; prev.item.id === next.item.id &amp;&amp; prev.item.title === next.item.title
+);</code></pre>
+
+<h2 id="stable-ref">Stable ref pattern</h2>
+    <p class="note">Use a ref to access the latest callback inside an effect that should not re-subscribe.</p>
+<pre><code>function useSocket(url: string, onMessage: (m: Msg) =&gt; void) {
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;  <span class="cmt">// updates every render — cheap</span>
+
+  useEffect(() =&gt; {
+    const ws = new WebSocket(url);
+    ws.onmessage = (e) =&gt; onMessageRef.current(JSON.parse(e.data));
+    return () =&gt; ws.close();
+  }, [url]);  <span class="cmt">// 👈 not [url, onMessage] — would reconnect on every render</span>
+}</code></pre>
+
+<h2 id="stale-closure">Stale closure</h2>
+    <div class="label-bad">avoid</div>
+<pre><code>const [count, setCount] = useState(0);
+
+useEffect(() =&gt; {
+  const id = setInterval(() =&gt; {
+    console.log(count);    <span class="cmt">// always logs 0 — closure captured first-render value</span>
+  }, 1000);
+  return () =&gt; clearInterval(id);
+}, []);  <span class="cmt">// 👈 empty deps</span></code></pre>
+
+    <div class="label-good">prefer — functional setter or ref</div>
+<pre><code>useEffect(() =&gt; {
+  const id = setInterval(() =&gt; {
+    setCount((c) =&gt; c + 1);  <span class="cmt">// functional update — no stale capture</span>
+  }, 1000);
+  return () =&gt; clearInterval(id);
+}, []);
+
+<span class="cmt">// Or via ref when you need to read it</span>
+const countRef = useRef(count);
+countRef.current = count;</code></pre>
+
+<h2 id="flatlist-props">FlatList — perf props</h2>
+    <table>
+      <thead><tr><th>Prop</th><th>Default</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>keyExtractor</code></td><td>uses index</td><td>Return a stable id. Index keys break <code>memo</code> when items reorder.</td></tr>
+        <tr><td><code>getItemLayout</code></td><td>—</td><td>Provide if row height is fixed. Skips measurement; enables instant <code>scrollToIndex</code>.</td></tr>
+        <tr><td><code>initialNumToRender</code></td><td>10</td><td>Lower on cold start if rows are heavy.</td></tr>
+        <tr><td><code>windowSize</code></td><td>21</td><td>Viewports rendered around visible. Lower = less memory; higher = fewer blanks.</td></tr>
+        <tr><td><code>maxToRenderPerBatch</code></td><td>10</td><td>Rows per batch. Lower = smoother scroll, slower fill.</td></tr>
+        <tr><td><code>updateCellsBatchingPeriod</code></td><td>50ms</td><td>Throttle for batches.</td></tr>
+        <tr><td><code>removeClippedSubviews</code></td><td>false</td><td>Detaches off-screen native views. Test for unmount issues.</td></tr>
+        <tr><td><code>ListEmptyComponent</code></td><td>—</td><td>Cheaper than conditional JSX above the list.</td></tr>
+      </tbody>
+    </table>
+
+<h2 id="flatlist-row">Memoized row + stable handlers</h2>
+<pre><code>const Row = memo(function Row({ item, onPress }: {
+  item: Item;
+  onPress: (id: string) =&gt; void;
+}) {
+  return (
+    &lt;Pressable onPress={() =&gt; onPress(item.id)} style={styles.row}&gt;
+      &lt;Text&gt;{item.title}&lt;/Text&gt;
+    &lt;/Pressable&gt;
+  );
+});
+
+function Screen({ items }: { items: Item[] }) {
+  const onPressRow = useCallback((id: string) =&gt; console.log(id), []);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo&lt;Item&gt;) =&gt; &lt;Row item={item} onPress={onPressRow} /&gt;,
+    [onPressRow]
+  );
+
+  const keyExtractor = useCallback((i: Item) =&gt; i.id, []);
+
+  const getItemLayout = useCallback(
+    (_: ArrayLike&lt;Item&gt; | null | undefined, index: number) =&gt;
+      ({ length: 64, offset: 64 * index, index }),
+    []
+  );
+
+  return (
+    &lt;FlatList
+      data={items}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      getItemLayout={getItemLayout}
+      initialNumToRender={10}
+      windowSize={11}
+      removeClippedSubviews
+    /&gt;
+  );
+}</code></pre>
+
+<h2 id="flamegraph">Reading a flamegraph (Hermes sampling profiler)</h2>
+    <p class="note">Capture a CPU profile on-device, then read it to find the hot path — instead of guessing.</p>
+    <h3>Capture</h3>
+    <ul>
+      <li>Dev Menu → <strong>Start Sampling Profiler</strong>; reproduce the slow interaction; <strong>Stop</strong> → writes a <code>.cpuprofile</code> on the device.</li>
+      <li>Pull it to the host (<code>adb pull</code> on Android; the Dev Menu surfaces the path on iOS) and open in Chrome DevTools → Performance → Load, or the Flipper Hermes debugger.</li>
+      <li>Profile a <strong>release</strong> build with source maps so frames are named, not minified.</li>
+    </ul>
+    <h3>Read</h3>
+    <ul>
+      <li><strong>Width = time.</strong> The widest frames are where time goes; a wide leaf at the bottom is the hot function.</li>
+      <li><strong>Self vs total.</strong> Total includes children, self is the function itself. Wide bar + wide child → the child is the cost. Wide bar + no children → that function is the cost.</li>
+      <li><strong>Tall &amp; thin = deep call stack</strong> (usually fine). <strong>Wide &amp; flat = a hot loop or a function called too often.</strong></li>
+      <li>Map the widest non-React frame back to a component/util. Usual culprits: <code>JSON.parse</code> of a large payload, an unmemoized derivation re-running each render, a comparator in a sort.</li>
+    </ul>
+    <p class="note"><strong>Blind spot:</strong> the Hermes profiler only sees the <strong>JS thread</strong>. If JS looks idle but frames still drop, the cost is on the UI/native side — switch to Xcode Instruments (Time Profiler) or Android Studio CPU profiler / Perfetto.</p>
+
+<h2 id="thread-isolation">JS thread vs UI thread — proving which is starved</h2>
+    <p class="note">"How do you know it's the JS thread?" The in-app Perf Monitor (Dev Menu → Show Perf Monitor) shows two FPS numbers.</p>
+    <table>
+      <thead><tr><th>Reading</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>JS FPS low, UI FPS fine</td><td>Your logic / re-renders / a large parse are blocking the JS thread. Confirm with the sampling profiler.</td></tr>
+        <tr><td>UI FPS also low</td><td>Native / layout / GPU work — long lists without virtualization, overdraw/shadows, oversized images.</td></tr>
+        <tr><td>UI fine, JS pinned during a gesture/animation</td><td>The animation is running on the JS thread — move it to the UI thread (Reanimated worklet, or <code>useNativeDriver</code>).</td></tr>
+      </tbody>
+    </table>
+    <p class="note">The three RN threads: <strong>JS</strong> (your code, renders, business logic), <strong>main / UI</strong> (native views, gestures, touch), <strong>shadow</strong> (Yoga layout). Crossings between them cost — that's the budget you're protecting.</p>
+
+<h2 id="android-only">"Janky only on Android" — divergence checklist</h2>
+    <p class="note">Same JS, same data, smooth on iOS, drops frames on Android. Ranked suspects:</p>
+    <ul>
+      <li><strong>Image memory.</strong> Android per-app heap is capped (often 256–512MB; <code>largeHeap</code> is opt-in). A decoded bitmap is W×H×4 bytes regardless of file size, so full-res photos OOM / GC-churn on Android first. Fix: explicit dimensions, server thumbnails, expo-image cache.</li>
+      <li><strong>Overdraw / elevation.</strong> Shadows (<code>elevation</code>) and stacked translucent layers re-rasterize more expensively on Android. Use the GPU-overdraw debug overlay.</li>
+      <li><strong>Entry-tier hardware.</strong> Test devices skew premium; a JS-thread budget that's fine on a flagship blows on a low-end Android chip.</li>
+      <li><strong><code>removeClippedSubviews</code></strong> behaves differently per platform; toggling it can fix or cause Android-only blank cells.</li>
+      <li><strong>Release-only differences.</strong> R8/ProGuard + Hermes bytecode differ from debug — always confirm jank on a release build.</li>
+    </ul>
+    <p class="note">Tools: Android Studio Profiler, <code>adb shell dumpsys gfxinfo &lt;pkg&gt;</code> for frame stats, Perfetto / systrace for the frame timeline.</p>
+
+<h2 id="selector-fanout">Render fan-out — only the changed item re-renders</h2>
+    <p class="note">A dashboard of live tiles where every update re-renders ALL tiles. Subscribe each tile to only its own slice.</p>
+    <div class="label-bad">avoid — whole-collection selector</div>
+<pre><code>const all = useStore((s) =&gt; s.byId);     <span class="cmt">// new ref on any change -&gt; every consumer re-renders</span>
+return ids.map((id) =&gt; &lt;Tile key={id} value={all[id]} /&gt;);</code></pre>
+    <div class="label-good">prefer — per-id selector inside a memoized tile</div>
+<pre><code>const Tile = memo(function Tile({ id }: { id: string }) {
+  const value = useStore((s) =&gt; s.byId[id]);   <span class="cmt">// re-renders only when THIS id changes</span>
+  return &lt;Text&gt;{value?.battery}&lt;/Text&gt;;
+});
+
+<span class="cmt">// parent passes only ids; each tile subscribes itself</span>
+return ids.map((id) =&gt; &lt;Tile key={id} id={id} /&gt;);</code></pre>
+    <p class="note">For object/array slices, add a shallow comparator (<code>useStore(sel, shallow)</code>) so a new wrapper ref with equal contents doesn't re-render. Pair with a non-reactive buffer that coalesces high-frequency (e.g. 5Hz) updates before they hit the store.</p>
+
+  </main>
+
+</div>
+
+</body>
+</html>

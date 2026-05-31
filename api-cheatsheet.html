@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>API Cheat Sheet</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --code-text: #1f2328;
+    --link: #0969da;
+    --heading: #1f2328;
+    --sidebar-bg: #f6f8fa;
+    --section-border: #d0d7de;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar {
+    background: var(--sidebar-bg);
+    padding: 24px 18px;
+    position: sticky; top: 0;
+    height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar h1 {
+    color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 12px; font-weight: 600;
+  }
+  .sidebar ul { list-style: none; padding: 0; margin: 0; }
+  .sidebar a {
+    color: var(--text); text-decoration: none;
+    display: block; padding: 4px 8px;
+    border-radius: 4px; font-size: 13px;
+    margin-bottom: 1px;
+  }
+  .sidebar a:hover { background: rgba(9, 105, 218, 0.08); color: var(--link); }
+  .sidebar a.group {
+    color: var(--muted); font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 16px; pointer-events: none;
+  }
+  .main { padding: 32px 48px; max-width: 980px; }
+  h1.doc-title {
+    color: var(--heading); font-size: 28px;
+    margin: 0 0 4px; font-weight: 600;
+  }
+  .doc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    color: var(--heading); font-size: 20px;
+    margin-top: 40px; margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--section-border);
+    font-weight: 600;
+  }
+  h3 {
+    color: var(--heading); font-size: 16px;
+    margin-top: 22px; margin-bottom: 6px; font-weight: 600;
+  }
+  p { margin: 8px 0; color: var(--text); }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  code {
+    background: var(--code-bg); color: var(--code-text);
+    padding: 2px 5px; border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.5;
+    color: var(--code-text);
+  }
+  pre code { background: transparent; padding: 0; font-size: 13px; }
+  .cmt { color: #6e7781; font-style: italic; }
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0; font-size: 13.5px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px; text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; }
+    .main { padding: 20px; }
+  }
+
+  @media print {
+    .layout { display: block; }
+    .sidebar { display: none; }
+    .main { max-width: none; padding: 0; }
+    pre, pre code { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+    pre { border: 1px solid #ccc; }
+    h2, h3 { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+    html, body { font-size: 12px; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <h1>API Cheat Sheet</h1>
+    <ul>
+      <li><a class="group">Recipes</a></li>
+      <li><a href="#fetch-helpers">fetch helpers</a></li>
+      <li><a href="#zod-boundary">Boundary validation (Zod)</a></li>
+      <li><a href="#use-query">useQuery — basic</a></li>
+      <li><a href="#mutation-optimistic">Optimistic update</a></li>
+      <li><a href="#idempotency">Idempotency keys (mutation header)</a></li>
+      <li><a href="#token-refresh">Token refresh on 401</a></li>
+      <li><a href="#dedup">Request deduplication (RQ built-in)</a></li>
+      <li><a href="#cache-strategy">Cache strategy — invalidate vs setQueryData vs refetch</a></li>
+      <li><a href="#offline-outbox">Offline outbox queue — basic</a></li>
+      <li><a href="#why-bff">Why a BFF (backend-for-frontend)</a></li>
+      <li><a href="#sdui">Server-driven UI (component registry)</a></li>
+      <li><a href="#infinite">useInfiniteQuery (pagination)</a></li>
+    </ul>
+  </aside>
+
+  <main class="main">
+
+    <h1 class="doc-title">API Cheat Sheet</h1>
+    <div class="doc-sub">Data-layer / BFF recipes — paste-ready.</div>
+
+<h2 id="fetch-helpers">fetch helpers</h2>
+<pre><code>const API_URL = 'https://example.com/api';
+
+async function getItems(signal?: AbortSignal): Promise&lt;Item[]&gt; {
+  const r = await fetch(`${API_URL}/items`, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function postItem(input: { title: string }): Promise&lt;Item&gt; {
+  const r = await fetch(`${API_URL}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}</code></pre>
+
+<h2 id="zod-boundary">Boundary validation (Zod)</h2>
+    <p class="note">Validate the response shape at the network boundary, not deep in the UI. <code>parse</code> throws on mismatch (use for internal API contracts); <code>safeParse</code> returns a result object (use for input you want to branch on).</p>
+<pre><code>import { z } from 'zod';
+
+const ItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.number(),
+});
+const ItemsSchema = z.array(ItemSchema);
+
+type Item = z.infer&lt;typeof ItemSchema&gt;;   <span class="cmt">// schema is the single source of truth for the type</span>
+
+async function getItems(signal?: AbortSignal): Promise&lt;Item[]&gt; {
+  const r = await fetch(`${API_URL}/items`, { signal });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return ItemsSchema.parse(await r.json());   <span class="cmt">// throws -&gt; RQ surfaces it as a query error</span>
+}
+
+<span class="cmt">// safeParse when you want to branch instead of throw</span>
+const parsed = ItemSchema.safeParse(json);
+if (!parsed.success) {
+  console.warn(parsed.error.flatten());
+  return fallback;
+}
+return parsed.data;</code></pre>
+    <p class="note">A schema mismatch becomes a normal query/mutation error, so the existing error UI handles it — no separate code path.</p>
+
+<h2 id="use-query">useQuery — basic</h2>
+<pre><code>const { data, isLoading, isError, error, refetch } = useQuery&lt;Item[], Error&gt;({
+  queryKey: ['items'],
+  queryFn: () =&gt; getItems(),
+});</code></pre>
+
+<h2 id="mutation-optimistic">Optimistic update</h2>
+<pre><code>const qc = useQueryClient();
+
+const mutation = useMutation({
+  mutationFn: postItem,
+
+  onMutate: async (input) =&gt; {
+    await qc.cancelQueries({ queryKey: ['items'] });
+    const previous = qc.getQueryData&lt;Item[]&gt;(['items']);
+
+    const optimistic: Item = {
+      id: `temp-${Date.now()}`,
+      title: input.title,
+      createdAt: Date.now(),
+    };
+    qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt; [optimistic, ...old]);
+
+    return { previous };
+  },
+
+  onError: (_err, _input, ctx) =&gt; {
+    if (ctx?.previous) qc.setQueryData(['items'], ctx.previous);
+  },
+
+  onSettled: () =&gt; {
+    qc.invalidateQueries({ queryKey: ['items'] });
+  },
+});</code></pre>
+
+<h2 id="idempotency">Idempotency keys (mutation header)</h2>
+    <p class="note">Server-side dedupes retries / double-taps by client-generated UUID. Same key + same operation = same result, no double-processing.</p>
+<pre><code>function makeIdempotencyKey(): string {
+  return 'idem-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+async function sendCommand(input: { vehicleId: string; action: string }): Promise&lt;Result&gt; {
+  const idempotencyKey = makeIdempotencyKey();
+  const r = await fetch(`${API_URL}/command`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+<span class="cmt">// Pair with useMutation — RQ's built-in retry will reuse the SAME key on retry</span>
+<span class="cmt">// because the mutation variables (input) are stable. Server treats retry as duplicate.</span>
+const mutation = useMutation({
+  mutationFn: sendCommand,
+  retry: 2,
+});</code></pre>
+    <p class="note">For client-controlled keys that persist across re-renders, hoist the key generation into <code>onMutate</code> and store it in the context.</p>
+
+<h2 id="token-refresh">Token refresh on 401</h2>
+    <p class="note">Single in-flight refresh — all 401-failed requests await the same refresh promise.</p>
+<pre><code>let refreshPromise: Promise&lt;string&gt; | null = null;
+
+async function getAccessToken(): Promise&lt;string&gt; {
+  if (refreshPromise) return refreshPromise; <span class="cmt">// dedupe concurrent refreshes</span>
+
+  refreshPromise = (async () =&gt; {
+    const refreshToken = await SecureStore.getItemAsync('refresh');
+    const r = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!r.ok) throw new Error('refresh failed');
+    const { access } = await r.json();
+    await SecureStore.setItemAsync('access', access);
+    return access;
+  })();
+
+  try { return await refreshPromise; }
+  finally { refreshPromise = null; }
+}
+
+async function authedFetch(url: string, init: RequestInit = {}): Promise&lt;Response&gt; {
+  let token = await SecureStore.getItemAsync('access');
+  let r = await fetch(url, {
+    ...init,
+    headers: { ...init.headers, Authorization: `Bearer ${token}` },
+  });
+
+  if (r.status === 401) {
+    token = await getAccessToken();   <span class="cmt">// refresh once, then retry</span>
+    r = await fetch(url, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${token}` },
+    });
+  }
+  return r;
+}</code></pre>
+
+<h2 id="dedup">Request deduplication (RQ built-in)</h2>
+    <p class="note">React Query already dedupes — multiple components calling <code>useQuery</code> with the same key share one in-flight request. This is one of the strongest reasons to use RQ over hand-rolled <code>useEffect + fetch</code>.</p>
+<pre><code><span class="cmt">// Screen A and Screen B both mount and both call:</span>
+useQuery({ queryKey: ['user', userId], queryFn: () =&gt; getUser(userId) });
+
+<span class="cmt">// → ONE network request. Both screens get the same data from the cache.</span>
+<span class="cmt">// → On `staleTime` expiration, both subscribe to the next refetch.</span></code></pre>
+    <p class="note">For non-RQ fetches that need dedup (e.g., custom hook), use a module-scoped <code>Map&lt;key, Promise&gt;</code> — same pattern as the token refresh above.</p>
+
+<h2 id="cache-strategy">Cache strategy — invalidate vs setQueryData vs refetch</h2>
+    <table>
+      <thead><tr><th>Action</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>invalidateQueries</code></td><td>Server is source of truth. Mark stale + refetch on next observer.</td></tr>
+        <tr><td><code>setQueryData</code></td><td>You know the exact new shape (e.g., after a confirmed mutation response). Skips the network round-trip.</td></tr>
+        <tr><td><code>refetchQueries</code></td><td>Force immediate refetch (foreground), not just stale-marking.</td></tr>
+        <tr><td><code>removeQueries</code></td><td>Cache should be wiped (logout, account switch).</td></tr>
+        <tr><td><code>resetQueries</code></td><td>Reset to initial state (loading) and refetch.</td></tr>
+      </tbody>
+    </table>
+<pre><code><span class="cmt">// Confirmed mutation — directly write the response (saves a refetch)</span>
+onSuccess: (serverItem) =&gt; {
+  qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt;
+    old.map(i =&gt; i.id === serverItem.id ? serverItem : i)
+  );
+}
+
+<span class="cmt">// Mutation that affects related queries — invalidate broadly</span>
+onSuccess: () =&gt; {
+  qc.invalidateQueries({ queryKey: ['items'] });        <span class="cmt">// items list</span>
+  qc.invalidateQueries({ queryKey: ['itemCount'] });    <span class="cmt">// derived count</span>
+}
+
+<span class="cmt">// Logout — wipe everything user-specific</span>
+const onLogout = () =&gt; {
+  qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'user' });
+  qc.removeQueries({ predicate: (q) =&gt; q.queryKey[0] === 'items' });
+};</code></pre>
+
+<h2 id="offline-outbox">Offline outbox queue — basic</h2>
+    <p class="note">Queue writes while offline, persist them, drain in order when connectivity returns. Each job carries a stable idempotency key generated once at enqueue, so a retry after a flaky connection can't double-apply.</p>
+<pre><code>import NetInfo from '@react-native-community/netinfo';
+import { MMKV } from 'react-native-mmkv';
+
+const storage = new MMKV();
+const KEY = 'outbox';
+
+type Job = {
+  idempotencyKey: string;   <span class="cmt">// identity + sent on every retry</span>
+  url: string;
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body: unknown;
+  attempts: number;
+};
+
+function load(): Job[] {
+  const raw = storage.getString(KEY);
+  return raw ? (JSON.parse(raw) as Job[]) : [];
+}
+function save(jobs: Job[]) {
+  storage.set(KEY, JSON.stringify(jobs));
+}
+
+let draining = false;
+
+export function enqueue(job: Omit&lt;Job, 'attempts'&gt;) {
+  const jobs = load();
+  jobs.push({ ...job, attempts: 0 });
+  save(jobs);
+  void drain();                       <span class="cmt">// try now; no-op if offline</span>
+}
+
+export async function drain(): Promise&lt;void&gt; {
+  if (draining) return;               <span class="cmt">// single drainer</span>
+  const net = await NetInfo.fetch();
+  if (!net.isConnected) return;
+  draining = true;
+  try {
+    let jobs = load();
+    while (jobs.length) {
+      const job = jobs[0];            <span class="cmt">// FIFO — preserve order</span>
+      try {
+        const r = await fetch(job.url, {
+          method: job.method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': job.idempotencyKey,
+          },
+          body: JSON.stringify(job.body),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        jobs = jobs.slice(1);         <span class="cmt">// success -&gt; drop head</span>
+        save(jobs);
+      } catch {
+        jobs[0] = { ...job, attempts: job.attempts + 1 };
+        save(jobs);
+        break;                        <span class="cmt">// stop; retry on next reconnect</span>
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+<span class="cmt">// Drain whenever connectivity is restored</span>
+NetInfo.addEventListener((state) =&gt; {
+  if (state.isConnected) void drain();
+});</code></pre>
+    <p class="note">The caller — a feature/handler — owns the request and mints the idempotency key once; the queue just delivers it:</p>
+<pre><code><span class="cmt">// Caller: enqueue a write, and (optionally) update the cache optimistically.</span>
+function useAddItem() {
+  const qc = useQueryClient();
+
+  return (input: { title: string }) =&gt; {
+    const tempId = `temp-${Date.now()}`;
+
+    <span class="cmt">// optimistic cache write — UI updates immediately (same shape as the optimistic section)</span>
+    qc.setQueryData&lt;Item[]&gt;(['items'], (old = []) =&gt; [
+      { id: tempId, title: input.title, createdAt: Date.now() },
+      ...old,
+    ]);
+
+    <span class="cmt">// durable enqueue — survives offline + restart; tempId doubles as the idempotency key</span>
+    enqueue({
+      idempotencyKey: tempId,        <span class="cmt">// minted ONCE here; drain reuses it on every retry</span>
+      url: `${API_URL}/items`,
+      method: 'POST',
+      body: input,
+    });
+  };
+}
+
+<span class="cmt">// in a component</span>
+const addItem = useAddItem();
+&lt;Pressable onPress={() =&gt; addItem({ title: 'New' })}&gt;&lt;Text&gt;Add&lt;/Text&gt;&lt;/Pressable&gt;</code></pre>
+    <p class="note">Pair with an optimistic cache write so the UI updates immediately; the server reconciles when the job drains. Same idempotency key on replay means a double-send is deduped server-side. With the Zustand version below, the call is identical — just <code>useOutbox.getState().enqueue(...)</code> (or <code>const enqueue = useOutbox((s) =&gt; s.enqueue)</code> inside a component).</p>
+
+<h2 id="why-bff">Why a BFF (backend-for-frontend)</h2>
+    <p class="note">One client-shaped endpoint instead of the app orchestrating N service calls.</p>
+    <table>
+      <thead><tr><th>Reason</th><th>What it buys the client</th></tr></thead>
+      <tbody>
+        <tr><td>Aggregation</td><td>BFF fans out to many services, returns one response — the app makes a single round-trip (latency + battery win on cellular).</td></tr>
+        <tr><td>Shaping</td><td>Payload trimmed to exactly what the screen needs — no over-fetch, smaller responses.</td></tr>
+        <tr><td>Version decoupling</td><td>Contract is owned per client, so the app payload evolves without touching core services; old app versions keep working.</td></tr>
+        <tr><td>Topology hiding</td><td>Client never learns which services exist or how they're split.</td></tr>
+      </tbody>
+    </table>
+
+<h2 id="sdui">Server-driven UI (component registry)</h2>
+    <p class="note">Server sends a tree of typed nodes; the client maps each <code>type</code> to a component. Unknown types render null, so a new server widget never crashes an old client — that is what makes server-driven rollout safe.</p>
+<pre><code>type UINode = {
+  type: string;
+  props?: Record&lt;string, unknown&gt;;
+  children?: UINode[];
+};
+
+const registry: Record&lt;string, React.FC&lt;any&gt;&gt; = {
+  text:   ({ value }) =&gt; &lt;Text&gt;{value}&lt;/Text&gt;,
+  button: ({ label, onPress }) =&gt; &lt;Pressable onPress={onPress}&gt;&lt;Text&gt;{label}&lt;/Text&gt;&lt;/Pressable&gt;,
+  stack:  ({ children }) =&gt; &lt;View&gt;{children}&lt;/View&gt;,
+};
+
+function renderNode(node: UINode): React.ReactNode {
+  const Comp = registry[node.type];
+  if (!Comp) return null;                 <span class="cmt">// unknown type -&gt; ignore, don't crash</span>
+  const kids = node.children?.map((c, i) =&gt; (
+    &lt;React.Fragment key={i}&gt;{renderNode(c)}&lt;/React.Fragment&gt;
+  ));
+  return &lt;Comp {...node.props}&gt;{kids}&lt;/Comp&gt;;
+}
+
+<span class="cmt">// Validate the layout payload at the boundary, then render:</span>
+const LayoutSchema: z.ZodType&lt;UINode&gt; = z.lazy(() =&gt;
+  z.object({
+    type: z.string(),
+    props: z.record(z.unknown()).optional(),
+    children: z.array(LayoutSchema).optional(),
+  })
+);
+
+function Screen({ json }: { json: unknown }) {
+  const tree = LayoutSchema.parse(json);
+  return &lt;&gt;{renderNode(tree)}&lt;/&gt;;
+}</code></pre>
+    <p class="note">Evolve additively: add new node types, never repurpose an existing one. Old clients ignore types they don't know; new clients render them.</p>
+
+<h2 id="infinite">useInfiniteQuery (pagination)</h2>
+<pre><code>const {
+  data, fetchNextPage, hasNextPage, isFetchingNextPage,
+} = useInfiniteQuery&lt;Page, Error&gt;({
+  queryKey: ['items', 'infinite'],
+  queryFn: ({ pageParam, signal }) =&gt;
+    fetch(`${API_URL}/items?cursor=${pageParam ?? ''}`, { signal }).then(r =&gt; r.json()),
+  initialPageParam: null as string | null,
+  getNextPageParam: (last) =&gt; last.nextCursor,
+});
+
+const items = data?.pages.flatMap((p) =&gt; p.items) ?? [];
+
+&lt;FlatList
+  data={items}
+  keyExtractor={(i) =&gt; i.id}
+  renderItem={({ item }) =&gt; &lt;Row item={item} /&gt;}
+  onEndReached={() =&gt; { if (hasNextPage &amp;&amp; !isFetchingNextPage) fetchNextPage(); }}
+  onEndReachedThreshold={0.5}
+  ListFooterComponent={isFetchingNextPage ? &lt;ActivityIndicator /&gt; : null}
+/&gt;</code></pre>
+
+  </main>
+
+</div>
+
+</body>
+</html>
